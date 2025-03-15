@@ -1,0 +1,65 @@
+# Este archivo .gitignore está optimizado para proyectos Unity
+
+# Archivos generados por Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Carpeta de memoria caché de Visual Studio / MonoDevelop / Rider
+.vs/
+.idea/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity3D meta files que deberían ser ignorados
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Unity3D generated file on crash reports
+sysinfo.txt
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Crashlytics generated file
+crashlytics-build.properties
+
+# Carpeta de respaldos creada por herramientas como emacs
+*~
+
+# Archivos de macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Carpetas específicas que podrían contener assets muy grandes
+# Descomenta si los necesitas en gitignore
+#Assets/AssetStoreTools*
+#[Aa]ssets/[Ss]treamingAssets/
+
+# Archivos de configuración de Visual Studio Code
+.vscode/

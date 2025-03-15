@@ -1,0 +1,1744 @@
+# Informe Completo de Arquitectura MOBA
+## Descripción detallada de todos los sistemas, clases y sus conexiones
+
+## 1. SISTEMAS CORE
+
+### 1.1 Hero System (Sistema de Héroes)
+Sistema encargado de definir, crear y gestionar los héroes controlables por los jugadores.
+
+#### 1.1.1 HeroDefinition (SO)
+**Descripción**: ScriptableObject que define todas las características base de un héroe.  
+**Propósito**: Almacenar toda la información estática y configurable de un héroe.  
+**Responsabilidades**:
+- Definir estadísticas base (vida, maná, ataque, etc.)
+- Definir slots de habilidades disponibles
+- Definir modelo visual y recursos gráficos (retrato, ícono)
+- Almacenar datos de progresión de estadísticas por nivel
+- Definir arquetipo/rol del héroe (Tanque, Mago, Soporte, etc.)
+
+**Conexiones**:
+- Usado por **HeroFactory** para instanciar héroes
+- Referenciado por **Hero** para obtener datos de base
+- Referenciado por **HeroSelectionManager** para mostrar opciones
+- Vinculado a **AbilityDefinition** para asignar habilidades
+
+#### 1.1.2 Hero (Component)
+**Descripción**: Componente principal que representa un héroe en el juego.  
+**Propósito**: Servir como punto central de operación para un héroe controlable.  
+**Responsabilidades**:
+- Coordinar los demás componentes del héroe (stats, movimiento, etc.)
+- Gestionar el ciclo de vida del héroe (spawn, muerte, respawn)
+- Procesar comandos del jugador o IA
+- Gestionar el inventario de items
+- Servir como punto de referencia para efectos y habilidades
+
+**Conexiones**:
+- Contiene/referencia **HeroStats** para manejar estadísticas
+- Contiene/referencia **HeroMovement** para movimiento
+- Contiene **AbilityController** para habilidades
+- Controlado por **PlayerController** o **AIController**
+- Se comunica con **CombatManager** para interacciones de combate
+- Se comunica con **InventorySystem** para gestión de items
+
+#### 1.1.3 HeroFactory
+**Descripción**: Responsable de instanciar héroes en el juego.  
+**Propósito**: Centralizar la creación de héroes para garantizar consistencia.  
+**Responsabilidades**:
+- Instanciar prefabs de héroes
+- Configurar héroes según su HeroDefinition
+- Asignar habilidades iniciales
+- Inicializar estadísticas y componentes adicionales
+
+**Conexiones**:
+- Utiliza **HeroDefinition** para saber qué instanciar
+- Crea instancias de **Hero**
+- Notifica a **GameManager** cuando se crea un héroe
+- Se comunica con **AbilityRegistry** para asignar habilidades
+
+#### 1.1.4 HeroStats
+**Descripción**: Gestiona las estadísticas y atributos de un héroe.  
+**Propósito**: Centralizar el manejo de estadísticas, incluyendo buffs y modificadores.  
+**Responsabilidades**:
+- Mantener estadísticas actuales (vida, maná, velocidad, etc.)
+- Calcular estadísticas derivadas (velocidad de ataque, regeneración, etc.)
+- Aplicar modificadores temporales (buffs/debuffs)
+- Calcular crecimiento de estadísticas por nivel
+
+**Conexiones**:
+- Pertenece a una instancia de **Hero**
+- Utilizado por **CombatSystem** para cálculos de daño
+- Modificado por **EffectSystem** con buffs/debuffs
+- Utilizado por **AbilitySystem** para comprobar costos/requisitos
+- Modificado por **ItemSystem** cuando se equipan items
+
+#### 1.1.5 HeroMovement
+**Descripción**: Controla el movimiento específico de los héroes.  
+**Propósito**: Gestionar los aspectos de movimiento de forma separada para mayor modularidad.  
+**Responsabilidades**:
+- Implementar la lógica de movimiento (pathfinding, colisiones)
+- Gestionar estados de movimiento (quieto, caminando, corriendo)
+- Aplicar modificadores de velocidad
+- Gestionar animaciones relacionadas con movimiento
+
+**Conexiones**:
+- Pertenece a una instancia de **Hero**
+- Recibe comandos de **PlayerController** o **AIController**
+- Interactúa con **MapSystem** para navegación
+- Afectado por **EffectSystem** (ralentizaciones, aceleraciones)
+- Utiliza datos de **HeroStats** para velocidad base
+
+#### 1.1.6 HeroArchetype
+**Descripción**: Define los diferentes roles o arquetipos de héroes.  
+**Propósito**: Categorizar héroes por su estilo de juego para balanceo y diseño.  
+**Responsabilidades**:
+- Definir las características generales de cada arquetipo
+- Influir en las estadísticas base y su crecimiento
+- Guiar las recomendaciones de items y habilidades
+
+**Conexiones**:
+- Utilizado por **HeroDefinition** para categorizar héroes
+- Referenciado por **ItemSystem** para restricciones de items
+- Utilizado por **MatchmakingSystem** para equilibrar equipos
+- Guía al **AISystem** para comportamiento apropiado al rol
+
+#### 1.1.7 HeroLoadout
+**Descripción**: Sistema para configurar conjuntos de habilidades y equipo previo a partida.  
+**Propósito**: Permitir personalización de héroes antes de iniciar una partida.  
+**Responsabilidades**:
+- Gestionar selección de habilidades alternativas
+- Gestionar selección de talentos/runas
+- Guardar configuraciones preestablecidas
+- Validar configuraciones según restricciones
+
+**Conexiones**:
+- Interactúa con **HeroSelectionManager** durante selección
+- Comunica configuración a **HeroFactory** al crear héroe
+- Utiliza **PersistenceSystem** para guardar configuraciones
+- Referencia **AbilityDefinition** para opciones disponibles
+
+### 1.2 Ability System (Sistema de Habilidades)
+Sistema modular para definir, crear y ejecutar habilidades de héroes y efectos especiales.
+
+#### 1.2.1 AbilityDefinition (SO)
+**Descripción**: ScriptableObject que define las características de una habilidad.  
+**Propósito**: Almacenar toda la información estática y configurable de una habilidad.  
+**Responsabilidades**:
+- Definir comportamiento básico y parámetros (daño, duración, etc.)
+- Definir recursos visuales (íconos, efectos)
+- Establecer costos (maná, energía, cooldown)
+- Definir escalado por nivel de habilidad
+- Configurar componentes que forman la habilidad
+
+**Conexiones**:
+- Referenciado por **HeroDefinition** para asignar habilidades
+- Usado por **AbilityFactory** para instanciar habilidades
+- Vinculado a **AbilityComponent** para comportamientos específicos
+- Utilizado por **UISystem** para mostrar información de habilidades
+
+#### 1.2.2 BaseAbility
+**Descripción**: Clase base para todas las habilidades del juego.  
+**Propósito**: Definir la interfaz común y funcionalidad base para todas las habilidades.  
+**Responsabilidades**:
+- Implementar lógica básica de cooldown
+- Gestionar verificación de requisitos (maná, rango, etc.)
+- Establecer API para activación de habilidades
+- Manejar niveles de habilidad y mejoras
+- Coordinar componentes de habilidad
+
+**Conexiones**:
+- Heredada por tipos específicos de habilidades
+- Utiliza **AbilityComponent** para comportamientos específicos
+- Se comunica con **Hero** para obtener datos del lanzador
+- Interactúa con **CombatSystem** para efectos de combate
+- Genera efectos a través de **EffectSystem**
+
+#### 1.2.3 AbilityRegistry
+**Descripción**: Registro central de todas las habilidades disponibles.  
+**Propósito**: Centralizar el acceso a las definiciones de habilidades.  
+**Responsabilidades**:
+- Mantener colección de todas las AbilityDefinition
+- Proporcionar búsqueda por ID o nombre
+- Gestionar categorías y filtrado de habilidades
+- Validar integridad y dependencias de habilidades
+
+**Conexiones**:
+- Utilizado por **HeroFactory** para asignar habilidades
+- Utilizado por **AbilityUIManager** para mostrar información
+- Consultado por **HeroLoadout** para opciones disponibles
+- Proporciona datos a **BalanceAnalyzer** para análisis
+
+#### 1.2.4 AbilityUsage
+**Descripción**: Gestiona el uso y activación de habilidades.  
+**Propósito**: Separar la lógica de activación de la implementación específica.  
+**Responsabilidades**:
+- Implementar máquina de estados para casting
+- Validar requisitos (cooldown, recursos, estado)
+- Gestionar cancelación de habilidades
+- Procesar targeting (selección de objetivo)
+- Registrar estadísticas de uso
+
+**Conexiones**:
+- Utilizado por **Hero** para activar habilidades
+- Se comunica con **PlayerController** para input
+- Interactúa con **AnimationController** para animar casteo
+- Notifica a **CombatLogger** sobre uso de habilidades
+- Interactúa con **UISystem** para feedback visual
+
+#### 1.2.5 AbilityEffect
+**Descripción**: Implementación de los efectos producidos por habilidades.  
+**Propósito**: Encapsular la lógica de efectos para mejor modularidad.  
+**Responsabilidades**:
+- Aplicar efectos inmediatos (daño, curación)
+- Crear efectos persistentes (DoT, HoT)
+- Gestionar efectos visuales y sonoros
+- Aplicar modificadores de estado
+
+**Conexiones**:
+- Generado por **BaseAbility** al usar una habilidad
+- Utiliza **EffectSystem** para aplicar efectos de estado
+- Interactúa con **CombatSystem** para cálculos de daño
+- Utiliza **VisualEffectController** para efectos visuales
+
+#### 1.2.6 AbilityUpgrade
+**Descripción**: Sistema para mejorar habilidades con niveles o puntos.  
+**Propósito**: Gestionar la progresión de habilidades durante la partida.  
+**Responsabilidades**:
+- Gestionar puntos de habilidad disponibles
+- Aplicar mejoras al aumentar nivel
+- Validar requisitos de nivel para mejoras
+- Actualizar datos de UI para habilidades
+
+**Conexiones**:
+- Pertenece a instancias de **Hero**
+- Interactúa con **ProgressionSystem** para puntos disponibles
+- Modifica instancias de **BaseAbility**
+- Actualiza **AbilityUIManager** para reflejar mejoras
+
+#### 1.2.7 AbilityComponent
+**Descripción**: Componentes modulares que conforman funcionalidades de habilidades.  
+**Propósito**: Permitir composición de habilidades con bloques reutilizables.  
+**Responsabilidades**:
+- Implementar un aspecto específico de comportamiento
+- Configurarse según parámetros de AbilityDefinition
+- Interactuar con otros componentes
+- Escalarse con nivel de habilidad
+
+**Conexiones**:
+- Instanciado por **AbilityFactory**
+- Configurable desde **AbilityDefinition**
+- Utilizado por **BaseAbility** para comportamiento
+- Combinado con otros **AbilityComponent** para efectos complejos
+
+#### 1.2.8 AbilityModifier
+**Descripción**: Modificadores que alteran el comportamiento base de habilidades.  
+**Propósito**: Permitir variaciones y personalización de habilidades.  
+**Responsabilidades**:
+- Modificar parámetros de habilidades (daño, cooldown, etc.)
+- Añadir efectos adicionales
+- Cambiar comportamiento según condiciones
+- Modificar targeting o área de efecto
+
+**Conexiones**:
+- Aplicado a instancias de **BaseAbility**
+- Generado por **ItemSystem** (items que mejoran habilidades)
+- Aplicable desde **HeroLoadout** (talentos)
+- Puede ser temporal vía **EffectSystem**
+
+#### 1.2.9 ComboSystem
+**Descripción**: Sistema para crear y detectar combinaciones de habilidades.  
+**Propósito**: Permitir mecánicas avanzadas de combos y sinergias.  
+**Responsabilidades**:
+- Detectar secuencias de habilidades
+- Activar efectos especiales de combo
+- Gestionar timing y ventanas de combo
+- Proporcionar feedback visual de combos
+
+**Conexiones**:
+- Monitorea uso de **BaseAbility**
+- Genera efectos a través de **EffectSystem**
+- Interactúa con **UISystem** para feedback visual
+- Puede afectar a **CooldownManager** (reset de cooldowns)
+
+### 1.3 Player Core (Núcleo del Jugador)
+Sistema que maneja la interacción del jugador con el juego a través de su héroe.
+
+#### 1.3.1 PlayerController
+**Descripción**: Controla la entrada y acciones del jugador.  
+**Propósito**: Interpretar input del jugador y traducirlo a acciones de juego.  
+**Responsabilidades**:
+- Procesar input (mouse, teclado, control)
+- Transformar input en comandos para el héroe
+- Gestionar modos de interacción (movimiento, ataque, habilidades)
+- Implementar confirmación y cancelación de acciones
+
+**Conexiones**:
+- Controla una instancia de **Hero**
+- Se comunica con **HeroMovement** para movimiento
+- Interactúa con **AbilityUsage** para activar habilidades
+- Envía comandos a **CombatSystem** para ataques
+- Se comunica con **UISystem** para interacciones con interfaz
+
+#### 1.3.2 PlayerStats
+**Descripción**: Estadísticas específicas del jugador (no del héroe).  
+**Propósito**: Mantener datos persistentes del jugador a través de partidas.  
+**Responsabilidades**:
+- Registro de estadísticas de juego (victorias, K/D/A, etc.)
+- Seguimiento de niveles de cuenta y progresión
+- Gestión de monedas y recursos persistentes
+- Registro de héroes desbloqueados
+
+**Conexiones**:
+- Almacenado en **PersistenceSystem**
+- Utilizado por **MatchmakingSystem** para emparejar
+- Actualizado por **MatchSystem** al finalizar partidas
+- Consultado por **UISystem** para mostrar perfil
+- Utilizado por **UnlockSystem** para verificar desbloqueos
+
+#### 1.3.3 PlayerNetwork
+**Descripción**: Componente de red para sincronizar al jugador.  
+**Propósito**: Gestionar aspectos de red específicos del jugador.  
+**Responsabilidades**:
+- Sincronizar estado del jugador entre clientes
+- Aplicar predicción y reconciliación
+- Gestionar autoridad sobre acciones del jugador
+- Optimizar tráfico de red para el jugador
+
+**Conexiones**:
+- Integrado con **NetworkSystem**
+- Sincroniza estado de **Hero**
+- Coordina con **PlayerController** para autoridad
+- Interactúa con **NetworkManager** para gestión de conexión
+
+### 1.4 Network System (Sistema de Red)
+Sistema que maneja todas las comunicaciones y sincronización en red del juego.
+
+#### 1.4.1 PlayerSpawner
+**Descripción**: Gestiona el spawn de jugadores en la red.  
+**Propósito**: Coordinar la entrada y posicionamiento de jugadores en el mapa.  
+**Responsabilidades**:
+- Instanciar héroes para jugadores conectados
+- Asignar puntos de spawn según equipos
+- Coordinar estado de jugadores reconectados
+- Gestionar inicialización de objetos de red
+
+**Conexiones**:
+- Coordina con **HeroFactory** para crear héroes
+- Utiliza **TeamManager** para asignación de equipos
+- Interactúa con **RespawnController** para ubicaciones
+- Coordinado por **GameManager** para estado de partida
+
+#### 1.4.2 GameManager
+**Descripción**: Administra el estado general del juego.  
+**Propósito**: Mantener y coordinar el flujo de la partida.  
+**Responsabilidades**:
+- Gestionar estados de juego (lobby, carga, juego, fin)
+- Coordinar transiciones entre estados
+- Mantener información global de la partida
+- Iniciar y finalizar partidas
+- Coordinar sistemas principales
+
+**Conexiones**:
+- Supervisa **MatchSystem** para progreso de partida
+- Coordina con **NetworkManager** para estado de red
+- Interactúa con **UISystem** para interfaces apropiadas
+- Coordina **PlayerSpawner** para entradas de jugadores
+- Comunica con **MatchmakingSystem** para setup de partida
+
+#### 1.4.3 NetworkManager
+**Descripción**: Gestiona conexiones y sincronización de red.  
+**Propósito**: Manejar toda la infraestructura de comunicación en red.  
+**Responsabilidades**:
+- Establecer conexiones cliente-servidor
+- Gestionar mensajes de red y RPC
+- Implementar modelos de replicación de objetos
+- Optimizar uso de ancho de banda
+- Manejar desconexiones y reconexiones
+
+**Conexiones**:
+- Integra todos los componentes con capacidad de red
+- Coordina con **GameManager** para estado de juego
+- Utilizado por **PlayerNetwork** para sincronización
+- Comunicación con **MatchmakingSystem** para conexiones
+
+### 1.5 Hero Selection (Selección de Héroe)
+Sistema para la selección y preparación de héroes antes de una partida.
+
+#### 1.5.1 HeroSelectionManager
+**Descripción**: Controla el proceso de selección de héroes.  
+**Propósito**: Gestionar la selección, bans y confirmación de héroes.  
+**Responsabilidades**:
+- Coordinar turnos de selección/ban
+- Validar selecciones (evitar duplicados)
+- Implementar tiempo límite para selección
+- Gestionar fase de estrategia pre-partida
+- Coordinar transición a fase de juego
+
+**Conexiones**:
+- Utiliza **HeroRegistry** para opciones disponibles
+- Coordina con **TeamManager** para asignación
+- Comunica selecciones a **HeroFactory**
+- Interactúa con **UISystem** para interfaz de selección
+- Coordina con **GameManager** para transición
+
+#### 1.5.2 HeroSelectionUI
+**Descripción**: Interfaz para seleccionar héroes.  
+**Propósito**: Proporcionar UI para el proceso de selección.  
+**Responsabilidades**:
+- Mostrar héroes disponibles y sus detalles
+- Implementar filtros y búsqueda
+- Visualizar selecciones de todos los jugadores
+- Mostrar temporizadores y estado de selección
+- Proporcionar previsualización de habilidades
+
+**Conexiones**:
+- Controlado por **HeroSelectionManager**
+- Utiliza datos de **HeroRegistry** para mostrar opciones
+- Interactúa con **UISystem** para integración con UI general
+- Muestra datos de **HeroLoadout** para configuraciones
+
+#### 1.5.3 HeroRegistry
+**Descripción**: Registro de todos los héroes disponibles.  
+**Propósito**: Centralizar acceso a definiciones de héroes.  
+**Responsabilidades**:
+- Mantener colección de todos los HeroDefinition
+- Proporcionar filtrado y búsqueda de héroes
+- Gestionar héroes desbloqueados para cada jugador
+- Validar integridad de datos de héroes
+
+**Conexiones**:
+- Consultado por **HeroSelectionManager** para opciones
+- Proporciona datos a **HeroSelectionUI**
+- Utilizado por **HeroFactory** para crear héroes
+- Integrado con **UnlockSystem** para disponibilidad
+
+### 1.6 Combat System (Sistema de Combate)
+Sistema que maneja las interacciones de combate entre entidades.
+
+#### 1.6.1 PlayerCombat
+**Descripción**: Gestiona el combate específico del jugador.  
+**Propósito**: Manejar aspectos de combate desde perspectiva del jugador.  
+**Responsabilidades**:
+- Procesar comandos de ataque del jugador
+- Gestionar priorización de objetivos
+- Calcular estadísticas de combate del jugador
+- Proporcionar feedback táctil de combate
+
+**Conexiones**:
+- Utilizado por instancias de **Hero** controladas por jugador
+- Interactúa con **PlayerController** para input
+- Coordina con **CombatManager** para mecánicas generales
+- Se comunica con **UISystem** para feedback visual
+
+#### 1.6.2 CombatManager
+**Descripción**: Controla las interacciones de combate.  
+**Propósito**: Centralizar y coordinar mecánicas de combate.  
+**Responsabilidades**:
+- Resolver ataques y daño
+- Implementar fórmulas de daño/mitigación
+- Gestionar muerte de unidades
+- Calcular estadísticas de combate
+- Implementar efectos de combate especiales
+
+**Conexiones**:
+- Utilizado por **PlayerCombat** y **AICombat**
+- Interactúa con **HeroStats** para datos de combate
+- Genera efectos a través de **EffectSystem**
+- Notifica a **UISystem** para actualizaciones de interfaz
+- Registra eventos en **CombatLogger**
+
+#### 1.6.3 ProjectileSystem
+**Descripción**: Sistema para gestionar proyectiles.  
+**Propósito**: Manejar la física y lógica de proyectiles.  
+**Responsabilidades**:
+- Simular movimiento de proyectiles
+- Detectar colisiones con objetivos
+- Gestionar efectos de impacto
+- Optimizar rendimiento con object pooling
+- Implementar tipos especiales de proyectiles
+
+**Conexiones**:
+- Generado por **AbilitySystem** para ataques a distancia
+- Interactúa con **CombatManager** para aplicar efectos
+- Utiliza **VisualEffectController** para efectos visuales
+- Puede utilizar **PhysicsSystem** para simulación
+
+#### 1.6.4 DamageTypeSystem
+**Descripción**: Sistema para tipos de daño y resistencias.  
+**Propósito**: Diversificar mecánicas de daño para estrategia.  
+**Responsabilidades**:
+- Definir tipos de daño (físico, mágico, verdadero, etc.)
+- Implementar resistencias específicas por tipo
+- Calcular mitigación de daño según tipo
+- Gestionar interacciones especiales entre tipos
+
+**Conexiones**:
+- Utilizado por **CombatManager** para cálculos
+- Integrado con **HeroStats** para resistencias
+- Aplicado por **AbilityEffect** para daño de habilidades
+- Considerado por **ItemSystem** para items defensivos
+
+#### 1.6.5 StatusResistance
+**Descripción**: Sistema para resistencia a efectos de estado.  
+**Propósito**: Permitir resistencia a CC y efectos negativos.  
+**Responsabilidades**:
+- Calcular probabilidad de resistir efectos
+- Reducir duración de efectos negativos
+- Implementar inmunidades específicas
+- Gestionar formas de reducir CC
+
+**Conexiones**:
+- Integrado con **EffectSystem** para aplicación
+- Parte de **HeroStats** para valores de resistencia
+- Considerado por **AbilityEffect** al aplicar efectos
+- Modificable por **ItemSystem** (items que dan resistencia)
+
+#### 1.6.6 CriticalHitSystem
+**Descripción**: Sistema para golpes críticos.  
+**Propósito**: Implementar mecánicas de daño crítico.  
+**Responsabilidades**:
+- Calcular probabilidad de crítico
+- Determinar daño crítico adicional
+- Gestionar efectos especiales de críticos
+- Implementar interacciones con otros sistemas
+
+**Conexiones**:
+- Utilizado por **CombatManager** para cálculos
+- Integrado con **HeroStats** para tasas críticas
+- Considerado por **ItemSystem** para modificadores
+- Puede disparar efectos vía **EffectSystem**
+
+### 1.7 UI System (Sistema de Interfaz)
+Sistema que maneja todas las interfaces de usuario y feedback visual.
+
+#### 1.7.1 PlayerUI
+**Descripción**: Interfaz específica del jugador.  
+**Propósito**: Mostrar información relevante para el jugador.  
+**Responsabilidades**:
+- Mostrar barras de vida/maná/recursos
+- Visualizar cooldowns de habilidades
+- Mostrar inventario y equipo
+- Proporcionar información táctica
+- Visualizar estado de buffs/debuffs
+
+**Conexiones**:
+- Observa estado de **Hero** para actualizaciones
+- Muestra información de **AbilitySystem**
+- Visualiza datos de **InventorySystem**
+- Coordina con **CombatSystem** para feedback
+- Integrado con **UIManager** para consistencia
+
+#### 1.7.2 AbilityUIManager
+**Descripción**: Interfaz para habilidades.  
+**Propósito**: Gestionar visualización de habilidades y cooldowns.  
+**Responsabilidades**:
+- Mostrar íconos y cooldowns de habilidades
+- Proporcionar tooltips detallados
+- Visualizar rango y área de efecto
+- Implementar indicadores de targeting
+- Mostrar feedback de uso de habilidades
+
+**Conexiones**:
+- Observa estado de **AbilitySystem**
+- Interactúa con **PlayerController** para input
+- Integrado con **PlayerUI** para cohesión
+- Muestra datos de **AbilityDefinition**
+
+#### 1.7.3 UIManager
+**Descripción**: Gestiona todas las interfaces del juego.  
+**Propósito**: Centralizar y coordinar diferentes UI del juego.  
+**Responsabilidades**:
+- Gestionar jerarquía de interfaces
+- Controlar transiciones entre pantallas
+- Implementar animaciones de UI
+- Gestionar eventos de UI
+- Coordinar consistencia visual
+
+**Conexiones**:
+- Coordina todas las interfaces específicas
+- Interactúa con **GameManager** para estado del juego
+- Recibe eventos de todos los sistemas para actualizaciones
+- Gestiona **InputSystem** para interacciones
+
+#### 1.7.4 HUD
+**Descripción**: Interfaz principal durante el juego.  
+**Propósito**: Mostrar información crítica durante la partida.  
+**Responsabilidades**:
+- Integrar componentes de UI (vida, mapa, etc.)
+- Mostrar notificaciones de juego
+- Proporcionar acceso a menús durante juego
+- Implementar elementos tácticos (indicadores de aliados)
+
+**Conexiones**:
+- Contiene **PlayerUI** y **MinimapSystem**
+- Gestionado por **UIManager**
+- Recibe notificaciones de **NotificationSystem**
+- Muestra datos de **MatchSystem**
+
+### 1.8 Respawn System (Sistema de Reaparición)
+Sistema que maneja la reaparición de entidades después de morir.
+
+#### 1.8.1 RespawnController
+**Descripción**: Controla el respawn de los jugadores.  
+**Propósito**: Gestionar el proceso de reaparición y temporizadores.  
+**Responsabilidades**:
+- Calcular tiempos de respawn
+- Seleccionar puntos de respawn apropiados
+- Coordinar estado de "muerto" de entidades
+- Implementar mecánicas especiales de respawn
+
+**Conexiones**:
+- Coordinado por **GameManager** para estado de juego
+- Interactúa con **Hero** para estado de muerte
+- Utiliza **RespawnPoint** para ubicaciones
+- Considerado por **MatchSystem** para penalizaciones
+
+#### 1.8.2 RespawnPoint
+**Descripción**: Punto de spawn para los jugadores.  
+**Propósito**: Definir ubicaciones válidas para reaparición.  
+**Responsabilidades**:
+- Proporcionar ubicación para respawn
+- Definir protección/inmunidad en zona de spawn
+- Implementar validación de seguridad de spawn
+- Asignar puntos según equipo o estado de juego
+
+**Conexiones**:
+- Utilizado por **RespawnController** para ubicaciones
+- Vinculado a **TeamSystem** para asignación por equipo
+- Parte de **MapSystem** para ubicaciones estratégicas
+- Puede tener efectos de **EffectSystem** (protección temporal)
+
+## 2. SISTEMAS ADICIONALES
+
+### 2.1 Economy System (Sistema de Economía)
+Sistema que maneja la economía del juego, incluyendo oro, tienda e items.
+
+#### 2.1.1 GoldManager
+**Descripción**: Gestiona la economía del juego.  
+**Propósito**: Controlar flujo de oro y recursos económicos.  
+**Responsabilidades**:
+- Gestionar obtención de oro (farm, kills, objetivos)
+- Implementar oro pasivo
+- Calcular recompensas por objetivos
+- Gestionar límites y penalizaciones económicas
+
+**Conexiones**:
+- Interactúa con **Hero** para asignar oro
+- Comunicación con **CombatSystem** para oro por kills
+- Vinculado a **ObjectiveManager** para recompensas
+- Utilizado por **ShopSystem** para compras
+
+#### 2.1.2 ShopSystem
+**Descripción**: Sistema de tienda para comprar items.  
+**Propósito**: Permitir adquisición y venta de items.  
+**Responsabilidades**:
+- Gestionar catálogo de items disponibles
+- Implementar lógica de compra/venta
+- Verificar requisitos de compra
+- Gestionar descuentos y ofertas
+- Recomendar items según héroe/situación
+
+**Conexiones**:
+- Utiliza **GoldManager** para verificar fondos
+- Interactúa con **InventorySystem** para almacenar items
+- Consulta **ItemDefinition** para información
+- Comunica con **UISystem** para interfaz de tienda
+
+#### 2.1.3 InventorySystem
+**Descripción**: Gestión del inventario del jugador.  
+**Propósito**: Manejar items equipados y disponibles.  
+**Responsabilidades**:
+- Gestionar slots de inventario
+- Implementar restricciones de inventario
+- Coordinar equipamiento de items
+- Gestionar consumibles y charges
+- Verificar restricciones de combinación
+
+**Conexiones**:
+- Pertenece a instancias de **Hero**
+- Interactúa con **ShopSystem** para adquisiciones
+- Utiliza **ItemFactory** para instanciar items
+- Comunica con **UISystem** para visualización
+- Afecta **HeroStats** cuando se equipan items
+
+#### 2.1.4 ItemDefinition (SO)
+**Descripción**: Define los items disponibles.  
+**Propósito**: Almacenar información estática sobre items.  
+**Responsabilidades**:
+- Definir estadísticas y efectos del item
+- Establecer costo y valor de reventa
+- Definir prerrequisitos y componentes
+- Configurar habilidades activas/pasivas
+- Definir restricciones de uso
+
+**Conexiones**:
+- Utilizado por **ItemFactory** para crear items
+- Consultado por **ShopSystem** para catálogo
+- Referenciado por otros **ItemDefinition** para recetas
+- Utilizado por **UISystem** para mostrar información
+
+#### 2.1.5 ItemFactory
+**Descripción**: Crea instancias de items.  
+**Propósito**: Centralizar creación de items para consistencia.  
+**Responsabilidades**:
+- Instanciar items según su definición
+- Inicializar estado y charges
+- Implementar object pooling para optimización
+- Vincular efectos y habilidades
+
+**Conexiones**:
+- Utiliza **ItemDefinition** para crear items
+- Provee items a **InventorySystem**
+- Comunica con **EffectSystem** para efectos de items
+- Puede generar **AbilityComponent** para items activos
+
+#### 2.1.6 CurrencyManager
+**Descripción**: Gestión de múltiples tipos de moneda.  
+**Propósito**: Manejar diferentes recursos económicos.  
+**Responsabilidades**:
+- Gestionar distintos tipos de moneda (oro, gemas, tokens)
+- Implementar conversiones entre monedas
+- Gestionar límites por tipo
+- Coordinar persistencia de monedas entre partidas
+
+**Conexiones**:
+- Extiende funcionalidad de **GoldManager**
+- Integrado con **PersistenceSystem** para monedas persistentes
+- Utilizado por **ShopSystem** para compras avanzadas
+- Conectado con **EventSystem** para recompensas especiales
+
+#### 2.1.7 BuildSystem
+**Descripción**: Sistema para guardar/cargar builds de items.  
+**Propósito**: Facilitar configuraciones preestablecidas de items.  
+**Responsabilidades**:
+- Guardar configuraciones de items preferidas
+- Cargar builds predefinidas
+- Sugerir secuencia de compra
+- Adaptar builds según situación de juego
+
+**Conexiones**:
+- Utiliza **PersistenceSystem** para almacenamiento
+- Interactúa con **ShopSystem** para recomendaciones
+- Integrado con **HeroLoadout** para configuraciones completas
+- Proporciona datos a **UISystem** para guías
+
+### 2.2 Map System (Sistema de Mapa)
+Sistema que maneja todos los aspectos del mapa de juego.
+
+#### 2.2.1 MapManager
+**Descripción**: Controla el mapa general.  
+**Propósito**: Gestionar estado y funcionamiento global del mapa.  
+**Responsabilidades**:
+- Inicializar entorno y estructuras del mapa
+- Coordinar sistemas específicos del mapa
+- Gestionar zonas y territorios
+- Implementar eventos globales del mapa
+
+**Conexiones**:
+- Coordina **FogOfWarSystem**, **LaneController**, etc.
+- Informa a **GameManager** sobre estado del mapa
+- Proporciona datos a **MinimapSystem**
+- Coordina con **ObjectiveManager** para objetivos
+
+#### 2.2.2 FogOfWarSystem
+**Descripción**: Sistema de niebla de guerra.  
+**Propósito**: Implementar mecánicas de visibilidad limitada.  
+**Responsabilidades**:
+- Calcular áreas visibles para cada equipo
+- Implementar ocultamiento de entidades
+- Gestionar almacenamiento de última vista conocida
+- Coordinar visión compartida
+
+**Conexiones**:
+- Integrado con **TeamSystem** para visión compartida
+- Afecta visualización en **MinimapSystem**
+- Interactúa con **VisionControl** para wards
+- Considerado por **AISystem** para toma de decisiones
+
+#### 2.2.3 LaneController
+**Descripción**: Gestiona las líneas del mapa.  
+**Propósito**: Controlar estado y progreso en cada línea.  
+**Responsabilidades**:
+- Coordinar spawn de creeps por línea
+- Gestionar estado de estructuras por línea
+- Calcular presión y control de línea
+- Implementar mecánicas específicas de línea
+
+**Conexiones**:
+- Coordina múltiples **CreepSpawner**
+- Monitorea **StructureManager** para estado
+- Proporciona información a **AISystem** para decisiones
+- Comunica estado a **MinimapSystem**
+
+#### 2.2.4 JungleController
+**Descripción**: Controla las áreas de jungla.  
+**Propósito**: Gestionar los campos neutrales y buffs de jungla.  
+**Responsabilidades**:
+- Coordinar spawn de monstruos neutrales
+- Gestionar buffs y rewards de jungla
+- Implementar mecánicas de control de jungla
+- Calcular estado y valor de recursos
+
+**Conexiones**:
+- Coordina múltiples **JungleCampManager**
+- Comunica con **ObjectiveManager** para buffs importantes
+- Proporciona datos a **MinimapSystem** para visualización
+- Afecta **AISystem** para priorización
+
+#### 2.2.5 ObjectiveManager
+**Descripción**: Gestiona objetivos especiales.  
+**Propósito**: Controlar objetivos mayores que otorgan ventajas significativas.  
+**Responsabilidades**:
+- Gestionar spawn y comportamiento de grandes objetivos
+- Calcular recompensas y buffs por completar
+- Implementar mecánicas específicas de objetivos
+- Coordinar eventos relacionados con objetivos
+
+**Conexiones**:
+- Comunica estado a **GameManager**
+- Informa a **NotificationSystem** sobre eventos
+- Otorga recompensas vía **GoldManager** y **BuffSystem**
+- Proporciona datos a **MinimapSystem** y **UISystem**
+
+#### 2.2.6 MinimapSystem
+**Descripción**: Sistema de minimapa.  
+**Propósito**: Proporcionar vista estratégica reducida del mapa.  
+**Responsabilidades**:
+- Renderizar mapa en formato reducido
+- Mostrar ubicaciones de jugadores y unidades
+- Implementar ping y comunicación en mapa
+- Visualizar estado de objetivos y estructura
+
+**Conexiones**:
+- Recibe datos de **MapManager** para visualización
+- Integrado con **FogOfWarSystem** para visibilidad
+- Parte de **UISystem** para interfaz
+- Utilizado por **PingSystem** para comunicación
+
+#### 2.2.7 StructureManager
+**Descripción**: Gestiona estructuras del mapa.  
+**Propósito**: Controlar torres, inhibidores y estructuras similares.  
+**Responsabilidades**:
+- Gestionar estado y salud de estructuras
+- Implementar comportamiento de ataque de torres
+- Coordinar efectos de destrucción de estructuras
+- Gestionar regeneración/escudo de estructuras
+
+**Conexiones**:
+- Comunica estado a **LaneController**
+- Informa a **MatchSystem** sobre progreso
+- Interactúa con **CombatSystem** para ataques
+- Afecta **AISystem** para comportamiento de creeps
+
+### 2.3 AI System (Sistema de IA)
+Sistema que controla el comportamiento de entidades no controladas por jugadores.
+
+#### 2.3.1 CreepController
+**Descripción**: Controla unidades básicas que avanzan por líneas.  
+**Propósito**: Implementar IA para minions/creeps de línea.  
+**Responsabilidades**:
+- Implementar movimiento por carriles
+- Gestionar comportamiento de combate
+- Coordinar priorización de objetivos
+- Implementar mecánicas especiales de creeps
+
+**Conexiones**:
+- Utiliza **AIPathfinding** para navegación
+- Interactúa con **CombatSystem** para ataques
+- Coordinado por **LaneController** para comportamiento
+- Utiliza **AITargetSelection** para selección de objetivos
+
+#### 2.3.2 NeutralController
+**Descripción**: Gestiona monstruos neutrales.  
+**Propósito**: Implementar IA para criaturas de jungla.  
+**Responsabilidades**:
+- Controlar comportamiento de jungla/neutral
+- Implementar mecánicas de aggro y reset
+- Gestionar recompensas y buffs al morir
+- Implementar comportamientos especiales
+
+**Conexiones**:
+- Coordinado por **JungleController**
+- Interactúa con **CombatSystem** para mecánicas de combate
+- Utiliza **AIPathfinding** para movimiento limitado
+- Proporciona buffs vía **BuffSystem** al morir
+
+#### 2.3.3 AIPathfinding
+**Descripción**: Sistema de navegación para IA.  
+**Propósito**: Calcular rutas y navegación para entidades AI.  
+**Responsabilidades**:
+- Calcular caminos óptimos
+- Evitar obstáculos y otras unidades
+- Implementar pathfinding en tiempo real
+- Optimizar cálculos para múltiples unidades
+
+**Conexiones**:
+- Utilizado por todas las entidades AI para movimiento
+- Consulta **MapSystem** para navegabilidad
+- Interactúa con **NavMeshSystem** de Unity
+- Coordina con **AIController** para decisiones de movimiento
+
+#### 2.3.4 BehaviorTree
+**Descripción**: Comportamientos complejos de IA.  
+**Propósito**: Implementar lógica avanzada de decisión para IA.  
+**Responsabilidades**:
+- Evaluar condiciones y seleccionar acciones
+- Implementar árbol de decisiones jerárquico
+- Permitir comportamientos contextuales
+- Facilitar reutilización de comportamientos
+
+**Conexiones**:
+- Utilizado por **AIController** para toma de decisiones
+- Puede utilizar **AITargetSelection** para evaluar objetivos
+- Consulta diversos sistemas para información contextual
+- Comanda **AIPathfinding** para ejecución de movimiento
+
+#### 2.3.5 AITargetSelection
+**Descripción**: Lógica de selección de objetivos.  
+**Propósito**: Determinar qué entidades atacar o priorizar.  
+**Responsabilidades**:
+- Evaluar amenazas y oportunidades
+- Implementar heurísticas de priorización
+- Considerar factores tácticos (vida, daño, etc.)
+- Adaptarse a diferentes tipos de IA
+
+**Conexiones**:
+- Utilizado por **CreepController** y otros sistemas AI
+- Consulta **CombatSystem** para información de amenazas
+- Puede usar **FogOfWarSystem** para verificar visibilidad
+- Interactúa con **TargetingSystem** para validación
+
+#### 2.3.6 AIController
+**Descripción**: Controlador base para entidades de IA.  
+**Propósito**: Servir como punto central para comportamiento de IA.  
+**Responsabilidades**:
+- Coordinar subsistemas de IA
+- Gestionar estados de comportamiento
+- Implementar reglas generales de IA
+- Servir como base para controladores específicos
+
+**Conexiones**:
+- Utiliza **BehaviorTree** para decisiones
+- Controla entidades como héroe IA o NPC
+- Coordina con **AIPathfinding** para movimiento
+- Interactúa con **CombatSystem** para acciones ofensivas
+
+### 2.4 Progression System (Sistema de Progresión)
+Sistema que maneja la progresión y desarrollo de entidades durante la partida.
+
+#### 2.4.1 ExperienceManager
+**Descripción**: Gestiona experiencia y niveles.  
+**Propósito**: Controlar progresión de nivel durante partidas.  
+**Responsabilidades**:
+- Calcular ganancia de experiencia (kills, tiempo, objetivos)
+- Determinar requisitos de experiencia por nivel
+- Gestionar distribución de experiencia (área, equipo)
+- Implementar bonificaciones y penalizaciones de exp
+
+**Conexiones**:
+- Interactúa con **Hero** para asignar experiencia
+- Coordina con **CombatSystem** para exp por kills
+- Puede comunicarse con **ObjectiveManager** para bonificaciones
+- Notifica a **UISystem** para feedback de niveles
+
+#### 2.4.2 TalentSystem
+**Descripción**: Sistema de talentos/mejoras por nivel.  
+**Propósito**: Permitir personalización y especialización durante la partida.  
+**Responsabilidades**:
+- Gestionar selección de talentos por nivel
+- Implementar árbol de talentos y requisitos
+- Aplicar efectos de talentos seleccionados
+- Validar disponibilidad según nivel y prerrequisitos
+
+**Conexiones**:
+- Integrado con **Hero** para aplicar efectos
+- Notifica a **UISystem** para selección
+- Puede afectar **AbilitySystem** con modificadores
+- Interactúa con **StatSystem** para modificar atributos
+
+#### 2.4.3 ProgressionRewards
+**Descripción**: Recompensas por progresión.  
+**Propósito**: Proporcionar incentivos por avanzar en nivel.  
+**Responsabilidades**:
+- Otorgar puntos de habilidad
+- Desbloquear mejoras de habilidades
+- Proporcionar mejoras de estadísticas
+- Implementar eventos especiales en ciertos niveles
+
+**Conexiones**:
+- Coordinado por **ExperienceManager** al subir nivel
+- Afecta **AbilityUpgrade** para puntos de habilidad
+- Interactúa con **HeroStats** para mejoras por nivel
+- Notifica a **UISystem** para feedback
+
+#### 2.4.4 PersistentProgression
+**Descripción**: Sistema de progresión entre partidas.  
+**Propósito**: Gestionar avance a nivel de cuenta de jugador.  
+**Responsabilidades**:
+- Rastrear experiencia y nivel de cuenta
+- Gestionar desbloqueo de contenido (héroes, cosméticos)
+- Implementar sistemas de maestría de héroe
+- Coordinar logros y recompensas a largo plazo
+
+**Conexiones**:
+- Integrado con **PersistenceSystem** para almacenamiento
+- Afecta **HeroRegistry** para disponibilidad de héroes
+- Interactúa con **CosmeticSystem** para desbloqueos
+- Coordinado con **UISystem** para visualización de progreso
+
+### 2.5 Match System (Sistema de Partida)
+Sistema que controla el flujo y reglas de la partida actual.
+
+#### 2.5.1 MatchController
+**Descripción**: Control general de la partida.  
+**Propósito**: Gestionar estado global y progreso de la partida.  
+**Responsabilidades**:
+- Coordinar fases de partida (inicio, mid-game, late-game)
+- Determinar condiciones de victoria/derrota
+- Gestionar reglas específicas del modo de juego
+- Coordinar eventos globales de partida
+
+**Conexiones**:
+- Coordinado por **GameManager** para estado general
+- Supervisa **ObjectiveTracker** para progreso
+- Interactúa con **TimerManager** para tiempos
+- Comunica estado a **UISystem** para visualización
+
+#### 2.5.2 ObjectiveTracker
+**Descripción**: Seguimiento de objetivos.  
+**Propósito**: Rastrear progreso hacia objetivos de victoria.  
+**Responsabilidades**:
+- Registrar captura/destrucción de objetivos principales
+- Calcular progreso hacia victoria
+- Implementar objetivos específicos del modo
+- Gestionar prioridad de objetivos
+
+**Conexiones**:
+- Monitorea **ObjectiveManager** para grandes objetivos
+- Comunica con **MatchController** para condiciones de victoria
+- Interactúa con **NotificationSystem** para anuncios
+- Proporciona datos a **UISystem** para visualización
+
+#### 2.5.3 TimerManager
+**Descripción**: Gestiona tiempos de partida.  
+**Propósito**: Controlar aspectos temporales de la partida.  
+**Responsabilidades**:
+- Mantener tiempo total de partida
+- Gestionar temporizadores de eventos
+- Implementar fases basadas en tiempo
+- Coordinar cuenta regresiva para objetivos
+
+**Conexiones**:
+- Coordinado por **MatchController** para eventos
+- Provee datos a **UISystem** para mostrar tiempos
+- Puede disparar eventos en **ObjectiveManager**
+- Interactúa con **GameManager** para estado de juego
+
+#### 2.5.4 ScoreboardSystem
+**Descripción**: Sistema de puntuaciones.  
+**Propósito**: Rastrear y mostrar estadísticas de jugadores.  
+**Responsabilidades**:
+- Compilar estadísticas de jugadores (K/D/A, oro, etc.)
+- Calcular puntuaciones y rankings
+- Actualizar en tiempo real
+- Proporcionar filtrado y ordenamiento
+
+**Conexiones**:
+- Recopila datos de **CombatSystem** para estadísticas
+- Monitorea **GoldManager** para economía
+- Proporciona datos a **UISystem** para mostrar
+- Puede influir en **MatchmakingSystem** para futuros emparejamientos
+
+#### 2.5.5 EndGameCondition
+**Descripción**: Condiciones para terminar la partida.  
+**Propósito**: Definir y evaluar condiciones de victoria/derrota.  
+**Responsabilidades**:
+- Verificar destrucción de estructuras principales
+- Implementar condiciones alternativas de victoria
+- Gestionar rendición de equipos
+- Determinar estado final de partida
+
+**Conexiones**:
+- Monitoreado por **MatchController** para fin de partida
+- Evalúa estado de **StructureManager** para condiciones
+- Puede considerar datos de **ScoreboardSystem**
+- Dispara eventos en **GameManager** al cumplirse
+
+### 2.6 Team System (Sistema de Equipos)
+Sistema que maneja la organización y mecánicas de equipos.
+
+#### 2.6.1 TeamManager
+**Descripción**: Gestión de equipos.  
+**Propósito**: Coordinar todos los aspectos relacionados con equipos.  
+**Responsabilidades**:
+- Gestionar pertenencia a equipos
+- Implementar mecánicas de equipo (buffs compartidos)
+- Coordinar comunicación dentro del equipo
+- Gestionar recursos compartidos de equipo
+
+**Conexiones**:
+- Coordinado por **GameManager** para configuración
+- Interactúa con **TeamAssignment** para distribución
+- Proporciona información a **UISystem** para visualización
+- Coordina con **FogOfWarSystem** para visión compartida
+
+#### 2.6.2 TeamAssignment
+**Descripción**: Asignación de jugadores a equipos.  
+**Propósito**: Distribuir jugadores en equipos equilibrados.  
+**Responsabilidades**:
+- Asignar jugadores a equipos al inicio
+- Implementar algoritmos de balance
+- Gestionar restricciones de composición
+- Manejar solicitudes de cambio de equipo
+
+**Conexiones**:
+- Coordinado por **MatchmakingSystem** en formación
+- Informa a **TeamManager** para configuración final
+- Puede utilizar datos de **PlayerStats** para balance
+- Interactúa con **HeroSelection** para restricciones
+
+#### 2.6.3 TeamObjectives
+**Descripción**: Objetivos específicos de equipo.  
+**Propósito**: Gestionar metas y recompensas a nivel de equipo.  
+**Responsabilidades**:
+- Definir objetivos específicos por equipo
+- Rastrear progreso hacia objetivos
+- Implementar recompensas de equipo
+- Coordinar objetivos con estrategias
+
+**Conexiones**:
+- Coordinado por **MatchController** para progresión
+- Interactúa con **ObjectiveManager** para grandes objetivos
+- Informa a **NotificationSystem** para anuncios
+- Proporciona datos a **UISystem** para visualización
+
+#### 2.6.4 TeamVision
+**Descripción**: Visión compartida entre miembros del equipo.  
+**Propósito**: Implementar mecánicas de visión y revelación compartida.  
+**Responsabilidades**:
+- Gestionar visión compartida en el mapa
+- Coordinar vision wards y unidades detectoras
+- Implementar mecánicas de visión verdadera
+- Gestionar revelación de unidades ocultas
+
+**Conexiones**:
+- Integrado con **FogOfWarSystem** para cálculos
+- Coordinado por **TeamManager** para pertenencia
+- Afecta visualización en **MinimapSystem**
+- Interactúa con **VisionControl** para objetos de visión
+
+### 2.7 Effect System (Sistema de Efectos)
+Sistema que maneja buffs, debuffs y efectos de estado.
+
+#### 2.7.1 BuffSystem
+**Descripción**: Sistema de efectos positivos.  
+**Propósito**: Gestionar mejoras temporales a entidades.  
+**Responsabilidades**:
+- Aplicar efectos positivos a unidades
+- Gestionar duración y stack de buffs
+- Implementar efectos periódicos
+- Coordinar efectos visuales de buffs
+
+**Conexiones**:
+- Utilizado por **AbilitySystem** para aplicar efectos
+- Modifica **HeroStats** con bonificaciones
+- Coordinado por **StatusEffectManager**
+- Genera efectos visuales vía **VisualEffectController**
+
+#### 2.7.2 DebuffSystem
+**Descripción**: Sistema de efectos negativos.  
+**Propósito**: Gestionar penalizaciones y control de masas.  
+**Responsabilidades**:
+- Aplicar efectos negativos a unidades
+- Implementar control de masas (stun, slow, root)
+- Gestionar duraciones y resistencias
+- Coordinar prioridades de CC
+
+**Conexiones**:
+- Utilizado por **AbilitySystem** para control de masas
+- Afectado por **StatusResistance** para mitigación
+- Coordinado por **StatusEffectManager**
+- Genera efectos visuales vía **VisualEffectController**
+
+#### 2.7.3 StatusEffectManager
+**Descripción**: Gestor de estados y efectos.  
+**Propósito**: Centralizar y coordinar todos los efectos de estado.  
+**Responsabilidades**:
+- Gestionar aplicación y remoción de efectos
+- Resolver conflictos entre efectos
+- Coordinar actualizaciones por tick
+- Implementar limpieza y purga de efectos
+
+**Conexiones**:
+- Coordina **BuffSystem** y **DebuffSystem**
+- Interactúa con **CombatSystem** para aplicación
+- Proporciona información a **UISystem** para visualización
+- Utiliza **VisualEffectController** para feedback
+
+#### 2.7.4 VisualEffectController
+**Descripción**: Efectos visuales de habilidades/estados.  
+**Propósito**: Gestionar feedback visual de efectos y habilidades.  
+**Responsabilidades**:
+- Mostrar efectos visuales para habilidades
+- Implementar indicadores de estado (buffs/debuffs)
+- Coordinar sistemas de partículas y shaders
+- Optimizar rendimiento visual
+
+**Conexiones**:
+- Utilizado por **AbilitySystem** para efectos de cast
+- Usado por **StatusEffectManager** para indicadores
+- Coordinado por **FeedbackSystem** para coherencia
+- Integrado con el sistema de VFX de Unity
+
+### 2.8 Matchmaking System (Sistema de Emparejamiento)
+Sistema que maneja la formación de partidas y emparejamiento de jugadores.
+
+#### 2.8.1 MatchmakingManager
+**Descripción**: Emparejamiento de jugadores.  
+**Propósito**: Crear partidas equilibradas entre jugadores.  
+**Responsabilidades**:
+- Implementar algoritmos de matchmaking
+- Gestionar colas de espera
+- Balancear equipos según habilidad
+- Aplicar restricciones de emparejamiento
+
+**Conexiones**:
+- Comunica con **NetworkSystem** para conexiones
+- Coordina **LobbySystem** para formación de salas
+- Utiliza datos de **PlayerRankingSystem**
+- Informa a **TeamAssignment** para formación de equipos
+
+#### 2.8.2 LobbySystem
+**Descripción**: Gestión de salas de espera.  
+**Propósito**: Coordinar preparativos pre-partida.  
+**Responsabilidades**:
+- Gestionar salas de espera y lobbies
+- Implementar chat y comunicación pre-partida
+- Coordinar listos y confirmaciones
+- Gestionar configuraciones de partida
+
+**Conexiones**:
+- Coordinado por **MatchmakingManager** en formación
+- Se comunica con **NetworkSystem** para conectividad
+- Interactúa con **UISystem** para interfaz de lobby
+- Transiciona a **HeroSelection** cuando todos están listos
+
+#### 2.8.3 PlayerRankingSystem
+**Descripción**: Sistema de clasificación.  
+**Propósito**: Evaluar y rastrear habilidad de jugadores.  
+**Responsabilidades**:
+- Calcular y actualizar MMR/ELO de jugadores
+- Implementar ligas y divisiones
+- Gestionar promociones y descensos
+- Prevenir abuso del sistema
+
+**Conexiones**:
+- Utilizado por **MatchmakingManager** para balance
+- Actualizado por **MatchSystem** tras partidas
+- Almacenado en **PersistenceSystem**
+- Visualizado a través de **UISystem**
+
+### 2.9 Feedback System (Sistema de Retroalimentación)
+Sistema que proporciona información y feedback al jugador.
+
+#### 2.9.1 NotificationSystem
+**Descripción**: Notificaciones durante el juego.  
+**Propósito**: Comunicar eventos importantes al jugador.  
+**Responsabilidades**:
+- Mostrar avisos de eventos importantes
+- Implementar diferentes niveles de prioridad
+- Gestionar temporizadores y expiración
+- Coordinar formato según importancia
+
+**Conexiones**:
+- Recibe eventos de todos los sistemas principales
+- Integrado con **UISystem** para visualización
+- Puede usar **SoundSystem** para alertas auditivas
+- Coordinado por **FeedbackManager**
+
+#### 2.9.2 PingSystem
+**Descripción**: Sistema de comunicación en el mapa.  
+**Propósito**: Facilitar comunicación táctica rápida.  
+**Responsabilidades**:
+- Implementar diferentes tipos de ping
+- Gestionar spam y limitaciones
+- Coordinar visualización en mapa/minimapa
+- Implementar ping contextual (enemigos, objetivos)
+
+**Conexiones**:
+- Interactúa con **MinimapSystem** para visualización
+- Integrado con **UISystem** para controles
+- Coordinado con **TeamSystem** para comunicación
+- Puede usar **SoundSystem** para alertas auditivas
+
+#### 2.9.3 CameraController
+**Descripción**: Control de cámara para MOBAs.  
+**Propósito**: Proporcionar visualización apropiada del juego.  
+**Responsabilidades**:
+- Implementar movimiento de cámara MOBA (edge pan, etc.)
+- Gestionar zoom y niveles de detalle
+- Implementar seguimiento de acción
+- Coordinar post-procesado y efectos visuales
+
+**Conexiones**:
+- Controlado por **PlayerController** para movimiento
+- Coordinado con **FeedbackSystem** para enfoque en eventos
+- Puede interactuar con **ReplaySystem** para repeticiones
+- Integrado con sistema de cámara de Unity
+
+#### 2.9.4 SoundSystem
+**Descripción**: Sistema de efectos de sonido y música.  
+**Propósito**: Proporcionar feedback auditivo y ambiente.  
+**Responsabilidades**:
+- Gestionar efectos de sonido para acciones
+- Implementar música dinámica según situación
+- Coordinar voice-overs y diálogos
+- Optimizar rendimiento de audio
+
+**Conexiones**:
+- Utilizado por casi todos los sistemas para feedback
+- Especialmente integrado con **CombatSystem** y **AbilitySystem**
+- Coordinado por **FeedbackManager**
+- Integrado con sistema de audio de Unity
+
+### 2.10 Persistence System (Sistema de Persistencia)
+Sistema que maneja el guardado y carga de datos entre sesiones.
+
+#### 2.10.1 PlayerProgressionData
+**Descripción**: Datos de progresión del jugador.  
+**Propósito**: Almacenar información persistente de progreso.  
+**Responsabilidades**:
+- Contener información de nivel de cuenta
+- Almacenar estadísticas históricas
+- Mantener registro de desbloqueos
+- Gestionar inventario permanente
+
+**Conexiones**:
+- Cargado/guardado por **SaveLoadSystem**
+- Utilizado por **PersistentProgression**
+- Consultado por sistemas de desbloqueo
+- Actualizado tras cada partida
+
+#### 2.10.2 SaveLoadSystem
+**Descripción**: Sistema para guardar/cargar datos.  
+**Propósito**: Gestionar operaciones de persistencia.  
+**Responsabilidades**:
+- Implementar serialización/deserialización
+- Gestionar almacenamiento (local, nube)
+- Implementar verificación de integridad
+- Manejar múltiples perfiles de guardado
+
+**Conexiones**:
+- Utilizado por todos los sistemas que requieren persistencia
+- Coordinado por **PersistenceManager**
+- Interactúa con APIs de almacenamiento de plataforma
+- Puede comunicarse con servicios en línea
+
+#### 2.10.3 PlayerPreferences
+**Descripción**: Configuraciones y preferencias.  
+**Propósito**: Almacenar ajustes personalizados del jugador.  
+**Responsabilidades**:
+- Gestionar configuración de controles
+- Almacenar preferencias de interfaz
+- Mantener configuración de audio/vídeo
+- Guardar configuraciones de juego
+
+**Conexiones**:
+- Cargado/guardado por **SaveLoadSystem**
+- Consultado por **UISystem** para configuración
+- Utilizado por **InputSystem** para mapeo de controles
+- Aplicado por sistemas audiovisuales
+
+## 3. SISTEMAS NUEVOS
+
+### 3.1 Social System (Sistema Social)
+Sistema que maneja interacciones sociales entre jugadores.
+
+#### 3.1.1 FriendManager
+**Descripción**: Gestión de amigos y relaciones sociales.  
+**Propósito**: Administrar la lista de amigos y relaciones sociales.  
+**Responsabilidades**:
+- Gestionar solicitudes de amistad
+- Mostrar estado en línea de amigos
+- Implementar grupos y círculos sociales
+- Proporcionar historial de juegos conjuntos
+
+**Conexiones**:
+- Coordinado con **PersistenceSystem** para almacenamiento
+- Integrado con **PartySystem** para invitaciones
+- Proporciona datos a **UISystem** para visualización
+- Puede coordinarse con servicios en línea
+
+#### 3.1.2 ChatSystem
+**Descripción**: Sistema de comunicación entre jugadores.  
+**Propósito**: Facilitar la comunicación textual entre jugadores.  
+**Responsabilidades**:
+- Implementar canales de chat (general, equipo, grupo)
+- Gestionar historial de mensajes
+- Implementar filtros y moderación
+- Facilitar comandos especiales
+
+**Conexiones**:
+- Integrado con **UISystem** para interfaz de chat
+- Coordinado con **TeamSystem** para chat de equipo
+- Puede interactuar con **ClubSystem** para chats de clan
+- Utiliza **NetworkSystem** para comunicaciones
+
+#### 3.1.3 PartySystem
+**Descripción**: Creación y gestión de grupos premade.  
+**Propósito**: Permitir a jugadores formar equipos predefinidos.  
+**Responsabilidades**:
+- Gestionar invitaciones y formación de grupos
+- Coordinar búsqueda de partida como grupo
+- Implementar roles y liderazgo de grupo
+- Facilitar comunicación interna de grupo
+
+**Conexiones**:
+- Integrado con **MatchmakingSystem** para búsqueda
+- Coordinado con **FriendManager** para invitaciones
+- Utiliza **ChatSystem** para comunicación interna
+- Interactúa con **LobbySystem** para preparativos
+
+#### 3.1.4 ClubSystem
+**Descripción**: Sistema de clanes/clubes para comunidades.  
+**Propósito**: Permitir formación de comunidades organizadas.  
+**Responsabilidades**:
+- Gestionar creación y configuración de clanes
+- Implementar jerarquía y roles dentro del clan
+- Coordinar eventos y competiciones de clan
+- Gestionar beneficios y progresión de clan
+
+**Conexiones**:
+- Almacenado en **PersistenceSystem**
+- Utiliza **ChatSystem** para comunicación
+- Puede integrarse con **MatchmakingSystem** para torneos
+- Proporciona datos a **UISystem** para visualización
+
+#### 3.1.5 EmoteSystem
+**Descripción**: Gestos y comunicación no verbal.  
+**Propósito**: Permitir expresiones y comunicación rápida.  
+**Responsabilidades**:
+- Gestionar biblioteca de emotes disponibles
+- Implementar selección y uso de emotes
+- Coordinar animaciones y efectos visuales
+- Implementar restricciones de spam
+
+**Conexiones**:
+- Integrado con **AnimationSystem** para reproducción
+- Utiliza **UISystem** para selección
+- Puede ser parte de **CosmeticSystem** para desbloqueos
+- Integrado con **FeedbackSystem** para visibilidad
+
+### 3.2 Cosmetic System (Sistema de Cosmética)
+Sistema que maneja aspectos visuales personalizables.
+
+#### 3.2.1 SkinManager
+**Descripción**: Gestión de aspectos visuales alternativos.  
+**Propósito**: Administrar skins y aspectos visuales de héroes.  
+**Responsabilidades**:
+- Gestionar colección de skins disponibles
+- Implementar aplicación de skins a héroes
+- Coordinar efectos visuales específicos de skin
+- Gestionar niveles de calidad y rareza
+
+**Conexiones**:
+- Integrado con **Hero** para aplicación visual
+- Utiliza **PersistenceSystem** para disponibilidad
+- Proporciona datos a **UISystem** para visualización
+- Puede afectar **AnimationSystem** para animaciones especiales
+
+#### 3.2.2 CosmeticInventory
+**Descripción**: Inventario de elementos cosméticos.  
+**Propósito**: Gestionar colección de cosméticos del jugador.  
+**Responsabilidades**:
+- Mantener registro de cosméticos desbloqueados
+- Gestionar equipamiento de diferentes cosméticos
+- Implementar organización y filtrado
+- Coordinar previsualización de cosméticos
+
+**Conexiones**:
+- Almacenado en **PersistenceSystem**
+- Proporciona datos a **UISystem** para visualización
+- Interactúa con sistemas específicos para aplicación
+- Puede vincularse a **ShopSystem** para adquisiciones
+
+#### 3.2.3 VisualEffectOverride
+**Descripción**: Permite personalizar efectos visuales.  
+**Propósito**: Modificar apariencia de efectos y habilidades.  
+**Responsabilidades**:
+- Gestionar reemplazos de efectos visuales
+- Coordinar consistencia visual entre efectos
+- Implementar niveles de personalización
+- Optimizar rendimiento de efectos personalizados
+
+**Conexiones**:
+- Modifica **VisualEffectController** para aplicación
+- Puede afectar **AbilitySystem** para efectos de habilidad
+- Integrado con **SkinManager** para coherencia
+- Utiliza **PersistenceSystem** para disponibilidad
+
+#### 3.2.4 HeroCustomization
+**Descripción**: Personalización de apariencia del héroe.  
+**Propósito**: Permitir modificaciones a partes específicas de héroes.  
+**Responsabilidades**:
+- Implementar sistema modular de personalización
+- Gestionar combinaciones válidas de elementos
+- Coordinar previsualización y aplicación
+- Implementar tintes y modificaciones de color
+
+**Conexiones**:
+- Integrado con **Hero** para aplicación visual
+- Utiliza componentes de **SkinManager**
+- Almacenado en **CosmeticInventory**
+- Proporciona datos a **UISystem** para visualización
+
+### 3.3 Spectator System (Sistema de Espectador)
+Sistema para ver partidas sin participar activamente.
+
+#### 3.3.1 SpectatorManager
+**Descripción**: Control de vista para espectadores.  
+**Propósito**: Gestionar experiencia de visualización de partidas.  
+**Responsabilidades**:
+- Gestionar conexiones de espectadores
+- Implementar modos de visualización
+- Coordinar controles de cámara para espectadores
+- Implementar restricciones y retrasos
+
+**Conexiones**:
+- Integrado con **NetworkSystem** para conexiones
+- Coordina **SpectatorCamera** para visualización
+- Interactúa con **UISystem** para interfaces específicas
+- Puede coordinarse con **ReplaySystem**
+
+#### 3.3.2 ReplaySystem
+**Descripción**: Grabación y reproducción de partidas.  
+**Propósito**: Permitir revisar partidas pasadas.  
+**Responsabilidades**:
+- Grabar datos de partida para reproducción
+- Implementar controles de reproducción
+- Gestionar almacenamiento de replays
+- Proporcionar análisis de replays
+
+**Conexiones**:
+- Captura datos de todos los sistemas relevantes
+- Utiliza **PersistenceSystem** para almacenamiento
+- Coordinado con **SpectatorManager** para visualización
+- Proporciona datos a **AnalyticsSystem** para análisis
+
+#### 3.3.3 ReplayController
+**Descripción**: Controles para navegar repeticiones.  
+**Propósito**: Permitir control detallado de reproducción.  
+**Responsabilidades**:
+- Implementar avance, retroceso, cámara lenta
+- Gestionar marcadores y momentos clave
+- Proporcionar controles de cámara avanzados
+- Implementar estadísticas en tiempo real
+
+**Conexiones**:
+- Controla **ReplaySystem** para reproducción
+- Interactúa con **UISystem** para interfaz
+- Puede proporcionar datos a **AnalyticsSystem**
+- Coordina **SpectatorCamera** para visualización
+
+#### 3.3.4 SpectatorCamera
+**Descripción**: Cámara especializada para espectadores.  
+**Propósito**: Proporcionar visualización optimizada para observadores.  
+**Responsabilidades**:
+- Implementar modos de cámara especializados
+- Proporcionar seguimiento inteligente de acción
+- Coordinar transiciones suaves entre puntos de interés
+- Implementar funciones cinematográficas
+
+**Conexiones**:
+- Controlado por **SpectatorManager** o **ReplayController**
+- Extiende funcionalidad de **CameraController**
+- Proporciona feeds a **UISystem** para visualización
+- Integrado con sistema de cámara de Unity
+
+### 3.4 Event System (Sistema de Eventos)
+Sistema para eventos especiales y temporadas competitivas.
+
+#### 3.4.1 SeasonManager
+**Descripción**: Gestión de temporadas competitivas.  
+**Propósito**: Coordinar temporadas y resets competitivos.  
+**Responsabilidades**:
+- Definir duración y reglas de temporadas
+- Gestionar transición entre temporadas
+- Coordinar recompensas de fin de temporada
+- Implementar clasificaciones de temporada
+
+**Conexiones**:
+- Afecta **PlayerRankingSystem** para resets
+- Coordinado con **EventScheduler** para timeline
+- Integrado con **PersistenceSystem** para historial
+- Proporciona datos a **UISystem** para visualización
+
+#### 3.4.2 EventScheduler
+**Descripción**: Programación de eventos especiales.  
+**Propósito**: Gestionar calendario de eventos en el juego.  
+**Responsabilidades**:
+- Planificar y programar eventos
+- Gestionar duración y disponibilidad
+- Coordinar promoción y notificaciones
+- Implementar activación automática de eventos
+
+**Conexiones**:
+- Puede modificar **GameModeVariants** para eventos
+- Integrado con **NotificationSystem** para avisos
+- Proporciona datos a **UISystem** para calendario
+- Puede afectar **ShopSystem** para ofertas especiales
+
+#### 3.4.3 EventRewards
+**Descripción**: Recompensas por participación en eventos.  
+**Propósito**: Gestionar incentivos para eventos especiales.  
+**Responsabilidades**:
+- Definir estructura de recompensas por evento
+- Implementar seguimiento de progreso
+- Gestionar distribución de recompensas
+- Coordinar exclusividad y rareza
+
+**Conexiones**:
+- Integrado con **PersistenceSystem** para almacenamiento
+- Puede afectar **CosmeticSystem** para desbloqueos
+- Proporciona datos a **UISystem** para visualización
+- Coordinado con **EventScheduler** para disponibilidad
+
+#### 3.4.4 GameModeVariants
+**Descripción**: Variantes de juego para eventos especiales.  
+**Propósito**: Definir modos de juego alternativos temporales.  
+**Responsabilidades**:
+- Implementar reglas especiales para eventos
+- Modificar sistemas core para variantes
+- Gestionar equilibrio específico para modo
+- Coordinar assets y contenido específico
+
+**Conexiones**:
+- Puede modificar **MatchSystem** para reglas especiales
+- Coordinado con **MapSystem** para variantes de mapa
+- Integrado con **MatchmakingSystem** para colas específicas
+- Proporciona datos a **UISystem** para explicación de reglas
+
+### 3.5 Analytics System (Sistema de Analíticas)
+Sistema para análisis y estadísticas de juego.
+
+#### 3.5.1 PerformanceTracker
+**Descripción**: Seguimiento de métricas de rendimiento.  
+**Propósito**: Recopilar datos sobre rendimiento técnico.  
+**Responsabilidades**:
+- Monitorear FPS y tiempos de carga
+- Rastrear uso de recursos (memoria, CPU)
+- Detectar condiciones anómalas
+- Generar reportes de rendimiento
+
+**Conexiones**:
+- Monitorea múltiples sistemas para rendimiento
+- Puede enviar datos a servicios externos
+- Coordinado por **AnalyticsManager**
+- Proporciona datos para optimización
+
+#### 3.5.2 BalanceAnalyzer
+**Descripción**: Análisis de balance de juego.  
+**Propósito**: Recopilar datos para ajustes de equilibrio.  
+**Responsabilidades**:
+- Analizar tasas de victoria por héroe/item
+- Rastrear métricas de uso y efectividad
+- Identificar combinaciones problemáticas
+- Generar reportes de balance
+
+**Conexiones**:
+- Recopila datos de **HeroSystem**, **ItemSystem**, etc.
+- Proporciona datos para equilibrio futuro
+- Puede integrar con **ReplaySystem** para análisis profundo
+- Coordinado por **AnalyticsManager**
+
+#### 3.5.3 PlayerBehaviorTracker
+**Descripción**: Análisis de comportamiento de jugadores.  
+**Propósito**: Estudiar patrones de juego y comportamiento.  
+**Responsabilidades**:
+- Rastrear patrones de movimiento y decisiones
+- Analizar comportamiento tóxico o problemático
+- Estudiar tendencias en estrategias populares
+- Identificar anomalías de comportamiento
+
+**Conexiones**:
+- Monitorea **PlayerController** para decisiones
+- Analiza datos de **ChatSystem** para comunicación
+- Coordinado por **AnalyticsManager**
+- Puede informar a sistemas de moderación
+
+#### 3.5.4 HeatmapGenerator
+**Descripción**: Generación de mapas de calor para análisis.  
+**Propósito**: Visualizar datos espaciales de partidas.  
+**Responsabilidades**:
+- Generar mapas de calor de actividad
+- Visualizar puntos de muerte/kill
+- Rastrear rutas y movimientos frecuentes
+- Identificar hotspots y zonas de interés
+
+**Conexiones**:
+- Recopila datos de **MapSystem** y movimiento
+- Puede integrarse con **ReplaySystem** para visualización
+- Proporciona visualizaciones para análisis de diseño
+- Coordinado por **AnalyticsManager**
+
+### 3.6 Tutorial System (Sistema de Tutoriales)
+Sistema para guiar a nuevos jugadores en el aprendizaje del juego.
+
+#### 3.6.1 TutorialManager
+**Descripción**: Gestión de tutoriales y guías.  
+**Propósito**: Coordinar experiencia de aprendizaje para nuevos jugadores.  
+**Responsabilidades**:
+- Gestionar progresión de tutoriales
+- Coordinar misiones y objetivos de aprendizaje
+- Implementar sistema de recompensas por completar
+- Adaptar contenido según nivel del jugador
+
+**Conexiones**:
+- Coordinado por **GameManager** para estado
+- Interactúa con **UISystem** para guías visuales
+- Puede modificar **MatchSystem** para escenarios de práctica
+- Utiliza **PersistenceSystem** para seguimiento
+
+#### 3.6.2 GuidedExperience
+**Descripción**: Experiencia guiada para nuevos jugadores.  
+**Propósito**: Proporcionar instrucción paso a paso interactiva.  
+**Responsabilidades**:
+- Implementar instrucciones contextuales
+- Proporcionar feedback inmediato sobre acciones
+- Gestionar progresión de dificultad
+- Coordinar ayudas visuales y marcadores
+
+**Conexiones**:
+- Integrado con **UISystem** para superposiciones
+- Puede modificar comportamiento de **AISystem** para demostraciones
+- Interactúa con **PlayerController** para detección de acciones
+- Coordinado por **TutorialManager**
+
+#### 3.6.3 PracticeMode
+**Descripción**: Modo de práctica contra bots.  
+**Propósito**: Permitir entrenamiento sin presión competitiva.  
+**Responsabilidades**:
+- Configurar entornos de práctica personalizados
+- Implementar bots con comportamiento ajustable
+- Proporcionar herramientas de práctica especiales
+- Facilitar experimentación y aprendizaje
+
+**Conexiones**:
+- Utiliza **AISystem** para bots
+- Modifica **MapSystem** para configuraciones especiales
+- Interactúa con **GameManager** para estado especial
+- Puede utilizar **ReplaySystem** para revisión
+
+#### 3.6.4 SkillAssessment
+**Descripción**: Evaluación de habilidades del jugador.  
+**Propósito**: Determinar nivel de habilidad para recomendaciones.  
+**Responsabilidades**:
+- Evaluar nivel de conocimiento y mecánica
+- Proporcionar recomendaciones personalizadas
+- Identificar áreas de mejora
+- Sugerir tutoriales o prácticas específicas
+
+**Conexiones**:
+- Puede utilizar datos de **PlayerStats** para historial
+- Proporciona información a **TutorialManager** para contenido
+- Interactúa con **UISystem** para resultados
+- Puede afectar **MatchmakingSystem** para primeras partidas

@@ -1,0 +1,80 @@
+
+# Flujo Principal de Epoch Legends
+
+## 1. Inicio y Conexión
+- El usuario inicia la aplicación
+- Se muestra pantalla de inicio con logo "Epoch Legends"
+- El usuario selecciona entre dos opciones:
+  - **Host**: Crear una nueva partida
+  - **Cliente**: Unirse a una partida existente
+- Si selecciona Host:
+  - Configura parámetros del servidor (nombre, contraseña opcional, número máximo de jugadores)
+  - El sistema crea el servidor y asigna al host como el primer jugador
+- Si selecciona Cliente:
+  - Ingresa dirección IP o busca servidores disponibles en red local
+  - Selecciona un servidor y se conecta
+
+## 2. Lobby y Asignación de Equipos
+- Al conectarse, el jugador entra al lobby
+- El sistema asigna automáticamente al jugador a un equipo (balanceando cantidad de jugadores)
+- Los jugadores pueden ver quién está en cada equipo
+- El host puede iniciar la partida cuando haya al menos 2 jugadores (1 en cada equipo)
+- El sistema muestra una cuenta regresiva cuando todos están listos
+
+## 3. Selección de Héroe
+- Tras la cuenta regresiva, se muestra la interfaz de selección de héroes
+- La interfaz muestra:
+  - **Panel principal**: Grid con todos los héroes disponibles
+  - **Panel de información**: Al hacer clic en un héroe, muestra:
+    - Estadísticas base (vida, maná, regeneración, ataque, defensa)
+    - Descripción de habilidades con iconos e información detallada
+    - Rol o arquetipo del héroe
+  - **Panel de selección de equipo**: Muestra los héroes ya seleccionados por cada equipo
+  - **Indicador de estado**: Muestra qué jugadores están listos
+  - **Temporizador**: Cuenta regresiva para selección
+
+- El jugador selecciona un héroe haciendo clic en él
+- Puede explorar diferentes héroes antes de decidir
+- Cuando está seguro, hace clic en el botón "Listo"
+- Cuando todos los jugadores están listos (o el temporizador llega a cero), la partida comienza
+
+## 4. Inicio de Partida
+- El sistema carga el mapa de juego
+- Cada equipo tiene su punto de respawn designado (base)
+- Los jugadores aparecen en su base con el héroe seleccionado
+- Se muestra una breve cuenta regresiva antes de que comience el movimiento
+- El HUD muestra:
+  - Barra de vida/maná del héroe
+  - Íconos de habilidades con cooldowns
+  - Minimapa
+  - Puntuación/objetivos de equipo
+
+## 5. Gameplay (Fase de Juego)
+- Los jugadores controlan a sus héroes usando:
+  - Clic derecho para moverse
+  - Teclas QWER (u otras configuradas) para activar habilidades
+  - Clic izquierdo para seleccionar objetivos
+- Pueden regresar a la base para recuperar vida/maná
+- El objetivo provisional puede ser:
+  - Destruir la estructura principal enemiga
+  - Capturar y mantener puntos de control
+  - Acumular un número determinado de eliminaciones
+
+## 6. Fin de Partida
+- La partida termina cuando se cumple la condición de victoria
+- Se muestra una pantalla de resultados con:
+  - Equipo ganador
+  - Estadísticas de cada jugador (eliminaciones, muertes, asistencias)
+  - Experiencia y recursos ganados
+- Los jugadores pueden elegir:
+  - Regresar al lobby para otra partida
+  - Salir del juego
+
+## Consideraciones Técnicas
+Basado en la arquitectura que has compartido, el flujo se implementaría así:
+
+- La selección Host/Cliente utilizaría los componentes de **NetworkManager** y **PlayerNetwork**
+- La asignación de equipos sería manejada por **TeamAssignment** y **TeamManager**
+- La selección de héroes utilizaría **HeroSelectionManager**, **HeroSelectionUI** y **HeroRegistry**
+- El spawn de jugadores sería controlado por **PlayerSpawner** y **RespawnPoint**
+- Durante el gameplay, interactuarían **PlayerController**, **Hero**, **AbilitySystem** y **CombatManager**

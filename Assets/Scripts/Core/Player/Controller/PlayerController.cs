@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using Mirror;
 using EpochLegends.Core.Hero;
-using EpochLegends.Core.Hero.Movement;
 
 namespace EpochLegends.Core.Player.Controller
 {
@@ -18,8 +17,8 @@ namespace EpochLegends.Core.Player.Controller
         [Header("References")]
         [SerializeField] private GameObject selectionIndicatorPrefab;
         
-        // References
-        private Hero.Components.Hero controlledHero;
+        // References - using fully qualified type names to avoid confusion with namespaces
+        private EpochLegends.Core.Hero.Hero controlledHero;
         private Camera mainCamera;
         private GameObject selectionIndicator;
         
@@ -30,7 +29,7 @@ namespace EpochLegends.Core.Player.Controller
         private int currentTargetingAbilityIndex = -1;
         
         // Properties
-        public Hero.Components.Hero ControlledHero => controlledHero;
+        public EpochLegends.Core.Hero.Hero ControlledHero => controlledHero;
         
         #region Unity Lifecycle
         
@@ -400,7 +399,7 @@ namespace EpochLegends.Core.Player.Controller
             // This could be based on player ID, connection ID, etc.
             
             // For simplicity in this example, we'll just find any hero with matching owner ID
-            Hero.Components.Hero[] heroes = FindObjectsOfType<Hero.Components.Hero>();
+            EpochLegends.Core.Hero.Hero[] heroes = FindObjectsOfType<EpochLegends.Core.Hero.Hero>();
             foreach (var hero in heroes)
             {
                 NetworkIdentity heroNetId = hero.GetComponent<NetworkIdentity>();
@@ -421,7 +420,7 @@ namespace EpochLegends.Core.Player.Controller
             GameObject heroObj = NetworkIdentity.spawned[heroNetId].gameObject;
             if (heroObj != null)
             {
-                Hero.Components.Hero hero = heroObj.GetComponent<Hero.Components.Hero>();
+                EpochLegends.Core.Hero.Hero hero = heroObj.GetComponent<EpochLegends.Core.Hero.Hero>();
                 if (hero != null)
                 {
                     // Assign hero to this player
@@ -441,7 +440,7 @@ namespace EpochLegends.Core.Player.Controller
             GameObject heroObj = NetworkIdentity.spawned[heroNetId].gameObject;
             if (heroObj != null)
             {
-                controlledHero = heroObj.GetComponent<Hero.Components.Hero>();
+                controlledHero = heroObj.GetComponent<EpochLegends.Core.Hero.Hero>();
                 Debug.Log($"Hero assigned: {controlledHero.name}");
             }
         }

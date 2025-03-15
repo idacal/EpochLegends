@@ -1,20 +1,19 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-using EpochLegends.Core.Hero.Definition;
 
 namespace EpochLegends.Core.HeroSelection.Registry
 {
     public class HeroRegistry : MonoBehaviour
     {
         [Header("Hero Configuration")]
-        [SerializeField] private List<HeroDefinition> registeredHeroes = new List<HeroDefinition>();
+        [SerializeField] private List<Core.Hero.HeroDefinition> registeredHeroes = new List<Core.Hero.HeroDefinition>();
         [SerializeField] private bool loadFromResources = true;
         [SerializeField] private string resourcePath = "ScriptableObjects/HeroDefinitions";
         
         // Cached hero registry
-        private Dictionary<string, HeroDefinition> heroesById = new Dictionary<string, HeroDefinition>();
-        private Dictionary<HeroArchetype, List<HeroDefinition>> heroesByArchetype = new Dictionary<HeroArchetype, List<HeroDefinition>>();
+        private Dictionary<string, Core.Hero.HeroDefinition> heroesById = new Dictionary<string, Core.Hero.HeroDefinition>();
+        private Dictionary<Core.Hero.HeroArchetype, List<Core.Hero.HeroDefinition>> heroesByArchetype = new Dictionary<Core.Hero.HeroArchetype, List<Core.Hero.HeroDefinition>>();
         
         // Singleton pattern
         public static HeroRegistry Instance { get; private set; }
@@ -45,9 +44,9 @@ namespace EpochLegends.Core.HeroSelection.Registry
             heroesByArchetype.Clear();
             
             // Initialize archetype dictionary
-            foreach (HeroArchetype archetype in System.Enum.GetValues(typeof(HeroArchetype)))
+            foreach (Core.Hero.HeroArchetype archetype in System.Enum.GetValues(typeof(Core.Hero.HeroArchetype)))
             {
-                heroesByArchetype[archetype] = new List<HeroDefinition>();
+                heroesByArchetype[archetype] = new List<Core.Hero.HeroDefinition>();
             }
             
             // Add heroes from serialized list
@@ -62,7 +61,7 @@ namespace EpochLegends.Core.HeroSelection.Registry
             // Load heroes from resources if enabled
             if (loadFromResources)
             {
-                HeroDefinition[] resourceHeroes = Resources.LoadAll<HeroDefinition>(resourcePath);
+                Core.Hero.HeroDefinition[] resourceHeroes = Resources.LoadAll<Core.Hero.HeroDefinition>(resourcePath);
                 foreach (var hero in resourceHeroes)
                 {
                     if (!heroesById.ContainsKey(hero.HeroId))
@@ -75,7 +74,7 @@ namespace EpochLegends.Core.HeroSelection.Registry
             Debug.Log($"Hero Registry initialized with {heroesById.Count} heroes");
         }
         
-        private void AddHero(HeroDefinition hero)
+        private void AddHero(Core.Hero.HeroDefinition hero)
         {
             if (hero == null || string.IsNullOrEmpty(hero.HeroId))
                 return;
@@ -89,12 +88,12 @@ namespace EpochLegends.Core.HeroSelection.Registry
         
         #region Hero Lookup
         
-        public HeroDefinition GetHeroById(string heroId)
+        public Core.Hero.HeroDefinition GetHeroById(string heroId)
         {
             if (string.IsNullOrEmpty(heroId))
                 return null;
                 
-            if (heroesById.TryGetValue(heroId, out HeroDefinition hero))
+            if (heroesById.TryGetValue(heroId, out Core.Hero.HeroDefinition hero))
             {
                 return hero;
             }
@@ -103,17 +102,17 @@ namespace EpochLegends.Core.HeroSelection.Registry
             return null;
         }
         
-        public List<HeroDefinition> GetHeroesByArchetype(HeroArchetype archetype)
+        public List<Core.Hero.HeroDefinition> GetHeroesByArchetype(Core.Hero.HeroArchetype archetype)
         {
-            if (heroesByArchetype.TryGetValue(archetype, out List<HeroDefinition> heroes))
+            if (heroesByArchetype.TryGetValue(archetype, out List<Core.Hero.HeroDefinition> heroes))
             {
-                return new List<HeroDefinition>(heroes);
+                return new List<Core.Hero.HeroDefinition>(heroes);
             }
             
-            return new List<HeroDefinition>();
+            return new List<Core.Hero.HeroDefinition>();
         }
         
-        public List<HeroDefinition> GetAllHeroes()
+        public List<Core.Hero.HeroDefinition> GetAllHeroes()
         {
             return heroesById.Values.ToList();
         }
@@ -132,7 +131,7 @@ namespace EpochLegends.Core.HeroSelection.Registry
         
         #region Hero Filtering
         
-        public List<HeroDefinition> GetHeroesByFilter(System.Func<HeroDefinition, bool> filter)
+        public List<Core.Hero.HeroDefinition> GetHeroesByFilter(System.Func<Core.Hero.HeroDefinition, bool> filter)
         {
             if (filter == null)
                 return GetAllHeroes();
@@ -140,7 +139,7 @@ namespace EpochLegends.Core.HeroSelection.Registry
             return heroesById.Values.Where(filter).ToList();
         }
         
-        public List<HeroDefinition> SearchHeroes(string searchTerm)
+        public List<Core.Hero.HeroDefinition> SearchHeroes(string searchTerm)
         {
             if (string.IsNullOrEmpty(searchTerm))
                 return GetAllHeroes();
@@ -166,7 +165,7 @@ namespace EpochLegends.Core.HeroSelection.Registry
             return DoesHeroExist(heroId);
         }
         
-        public List<HeroDefinition> GetUnlockedHeroes(string playerId)
+        public List<Core.Hero.HeroDefinition> GetUnlockedHeroes(string playerId)
         {
             // In a real implementation, this would filter heroes based on unlocks
             
@@ -184,7 +183,7 @@ namespace EpochLegends.Core.HeroSelection.Registry
             InitializeRegistry();
         }
         
-        public void AddHeroToRegistry(HeroDefinition hero)
+        public void AddHeroToRegistry(Core.Hero.HeroDefinition hero)
         {
             if (hero != null && !registeredHeroes.Contains(hero))
             {

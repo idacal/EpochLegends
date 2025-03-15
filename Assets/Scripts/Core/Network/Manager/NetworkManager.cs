@@ -1,11 +1,12 @@
 using UnityEngine;
 using Mirror;
+using System.Collections.Generic;
 
 namespace EpochLegends.Core.Network
 {
-    public class NetworkManager : Mirror.NetworkManager
+    public class EpochNetworkManager : Mirror.NetworkManager
     {
-        public static NetworkManager Instance { get; private set; }
+        public static EpochNetworkManager Instance { get; private set; }
 
         [Header("Server Configuration")]
         [SerializeField] private string serverName = "Epoch Legends Server";
@@ -19,8 +20,11 @@ namespace EpochLegends.Core.Network
         public bool HasPassword => !string.IsNullOrEmpty(serverPassword);
         public int MaxPlayers => maxPlayers;
 
-        private void Awake()
+        // Use 'override' keyword to properly override the base class Awake
+        protected override void Awake()
         {
+            base.Awake();
+            
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
@@ -64,14 +68,22 @@ namespace EpochLegends.Core.Network
         {
             base.OnServerAddPlayer(conn);
             
-            // Notify GameManager about new player
-            GameManager.Instance?.OnPlayerJoined(conn);
+            // Get a reference to GameManager without hard dependency
+            var gameManager = FindObjectOfType<GameManager>();
+            if (gameManager != null)
+            {
+                gameManager.OnPlayerJoined(conn);
+            }
         }
 
         public override void OnServerDisconnect(NetworkConnectionToClient conn)
         {
-            // Notify GameManager about player disconnection
-            GameManager.Instance?.OnPlayerLeft(conn);
+            // Get a reference to GameManager without hard dependency
+            var gameManager = FindObjectOfType<GameManager>();
+            if (gameManager != null)
+            {
+                gameManager.OnPlayerLeft(conn);
+            }
             
             base.OnServerDisconnect(conn);
         }

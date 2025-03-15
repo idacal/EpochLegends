@@ -247,10 +247,10 @@ namespace EpochLegends.Core.UI.Manager
             fadeCanvasGroup.alpha = 1;
             
             // Start fade in (from black)
-            LeanTween.alphaCanvas(fadeCanvasGroup, 0, fadeDuration)
-                .setOnComplete(() => {
-                    fadeCanvasGroup.gameObject.SetActive(false);
-                });
+            // Simple fading without LeanTween, just in case it's not available
+            StartCoroutine(FadeCanvasGroup(fadeCanvasGroup, 1, 0, fadeDuration, () => {
+                fadeCanvasGroup.gameObject.SetActive(false);
+            }));
         }
         
         public void FadeOut(float duration = -1, System.Action onComplete = null)
@@ -267,10 +267,7 @@ namespace EpochLegends.Core.UI.Manager
             fadeCanvasGroup.alpha = 0;
             
             // Start fade out (to black)
-            LeanTween.alphaCanvas(fadeCanvasGroup, 1, fadeDuration)
-                .setOnComplete(() => {
-                    onComplete?.Invoke();
-                });
+            StartCoroutine(FadeCanvasGroup(fadeCanvasGroup, 0, 1, fadeDuration, onComplete));
         }
         
         public void TransitionBetweenPanels(UIPanel from, UIPanel to, float duration = -1)
@@ -283,6 +280,23 @@ namespace EpochLegends.Core.UI.Manager
                 ShowPanel(to);
                 FadeIn(transitionDuration / 2);
             });
+        }
+        
+        // Coroutine para hacer fade sin dependencia de LeanTween
+        private System.Collections.IEnumerator FadeCanvasGroup(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration, System.Action onComplete = null)
+        {
+            float elapsed = 0f;
+            canvasGroup.alpha = startAlpha;
+            
+            while (elapsed < duration)
+            {
+                canvasGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, elapsed / duration);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            
+            canvasGroup.alpha = endAlpha;
+            onComplete?.Invoke();
         }
         
         #endregion

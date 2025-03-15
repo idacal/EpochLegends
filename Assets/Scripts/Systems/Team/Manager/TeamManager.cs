@@ -1,7 +1,7 @@
 using UnityEngine;
 using Mirror;
 using System.Collections.Generic;
-using EpochLegends.Core.Hero.Components;
+using EpochLegends.Core.Hero;
 using EpochLegends.Core.Player;
 
 namespace EpochLegends.Systems.Team.Manager
@@ -119,7 +119,10 @@ namespace EpochLegends.Systems.Team.Manager
             AssignToTeam(player, newTeamId);
             
             // Notify clients about team change
-            RpcNotifyTeamChange(player.identity.netId, oldTeamId, newTeamId);
+            if (player.identity != null)
+            {
+                RpcNotifyTeamChange(player.identity.netId, oldTeamId, newTeamId);
+            }
             
             return true;
         }
@@ -188,7 +191,8 @@ namespace EpochLegends.Systems.Team.Manager
         private void RpcNotifyTeamChange(uint playerNetId, int oldTeamId, int newTeamId)
         {
             // Client-side notification of team change for any player
-            if (NetworkIdentity.spawned.TryGetValue(playerNetId, out NetworkIdentity identity))
+            NetworkIdentity identity = null;
+            if (NetworkClient.spawned.TryGetValue(playerNetId, out identity))
             {
                 Debug.Log($"Player {identity.name} changed from team {oldTeamId} to {newTeamId}");
                 
@@ -266,14 +270,18 @@ namespace EpochLegends.Systems.Team.Manager
             // For example, you might have a HeroVisuals component that handles team coloring
             
             // Notify clients to update visuals
-            RpcApplyTeamVisuals(hero.netId, teamId);
+            if (hero.netIdentity != null)
+            {
+                RpcApplyTeamVisuals(hero.netIdentity.netId, teamId);
+            }
         }
         
         [ClientRpc]
         private void RpcApplyTeamVisuals(uint heroNetId, int teamId)
         {
             // Client-side application of team visuals
-            if (NetworkIdentity.spawned.TryGetValue(heroNetId, out NetworkIdentity identity))
+            NetworkIdentity identity = null;
+            if (NetworkClient.spawned.TryGetValue(heroNetId, out identity))
             {
                 Hero hero = identity.GetComponent<Hero>();
                 if (hero != null)

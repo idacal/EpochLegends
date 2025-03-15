@@ -2,7 +2,6 @@ using UnityEngine;
 using Mirror;
 using System.Collections.Generic;
 using EpochLegends.Core.Network;
-using EpochLegends.Core.Player;
 
 namespace EpochLegends
 {
@@ -162,7 +161,11 @@ namespace EpochLegends
             _stateTimer = heroSelectionTime;
             
             // Load hero selection scene on all clients
-            NetworkManager.Instance.ServerChangeScene(heroSelectionScene);
+            EpochNetworkManager networkManager = EpochNetworkManager.Instance;
+            if (networkManager != null)
+            {
+                networkManager.ServerChangeScene(heroSelectionScene);
+            }
         }
 
         [Server]
@@ -171,7 +174,11 @@ namespace EpochLegends
             _currentState = GameState.Playing;
             
             // Load gameplay scene on all clients
-            NetworkManager.Instance.ServerChangeScene(gameplayScene);
+            EpochNetworkManager networkManager = EpochNetworkManager.Instance;
+            if (networkManager != null)
+            {
+                networkManager.ServerChangeScene(gameplayScene);
+            }
         }
 
         [Server]
@@ -203,7 +210,22 @@ namespace EpochLegends
             }
             
             // Load lobby scene on all clients
-            NetworkManager.Instance.ServerChangeScene(lobbyScene);
+            EpochNetworkManager networkManager = EpochNetworkManager.Instance;
+            if (networkManager != null)
+            {
+                networkManager.ServerChangeScene(lobbyScene);
+            }
+        }
+        
+        public void OnHeroSelectionComplete(Dictionary<uint, string> selectionResults)
+        {
+            // Process hero selection results
+            // This would typically:
+            // 1. Store selected heroes for each player
+            // 2. Prepare for gameplay scene
+            
+            // Start the game
+            StartGame();
         }
     }
 

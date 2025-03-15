@@ -1,12 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
-using EpochLegends.Core.Hero.Components;
-using EpochLegends.Core.Hero.Stats;
-using EpochLegends.Core.Ability.Components;
+using EpochLegends.Core.Ability;
 
 namespace EpochLegends.Core.UI.PlayerUI
 {
+    // Utilizamos un alias para evitar ambigüedades con el namespace
+    using HeroClass = EpochLegends.Core.Hero.Hero;
+    
     public class PlayerUI : MonoBehaviour
     {
         [Header("Health & Resources")]
@@ -29,7 +30,7 @@ namespace EpochLegends.Core.UI.PlayerUI
         [SerializeField] private GameObject statusEffectPrefab;
         
         // References
-        private Hero trackedHero;
+        private HeroClass trackedHero;
         private Dictionary<int, StatusEffectUI> activeStatusEffects = new Dictionary<int, StatusEffectUI>();
         
         // State tracking
@@ -47,7 +48,7 @@ namespace EpochLegends.Core.UI.PlayerUI
             UpdateAbilityCooldowns();
         }
         
-        public void Initialize(Hero hero)
+        public void Initialize(HeroClass hero)
         {
             trackedHero = hero;
             
@@ -236,7 +237,7 @@ namespace EpochLegends.Core.UI.PlayerUI
         
         #region Event Handlers
         
-        private void OnHeroLevelUp(Hero hero)
+        private void OnHeroLevelUp(HeroClass hero)
         {
             // Update level text
             if (levelText != null)
@@ -412,23 +413,7 @@ namespace EpochLegends.Core.UI.PlayerUI
             {
                 // This status effect has expired
                 // In a real implementation, you might want to notify a parent controller
-                // For simplicity, we'll just fade out and destroy
-                FadeOutAndDestroy();
-            }
-        }
-        
-        private void FadeOutAndDestroy()
-        {
-            // Fade out animation
-            CanvasGroup group = GetComponent<CanvasGroup>();
-            if (group != null)
-            {
-                LeanTween.alphaCanvas(group, 0f, 0.5f).setOnComplete(() => {
-                    Destroy(gameObject);
-                });
-            }
-            else
-            {
+                // For simplicity, we'll just destroy the GameObject
                 Destroy(gameObject);
             }
         }

@@ -2,8 +2,8 @@ using UnityEngine;
 using Mirror;
 using System.Collections.Generic;
 using System.Linq;
-using EpochLegends.Core.Hero.Definition;
-using EpochLegends.Core.Network.Manager;
+using EpochLegends.Core.Hero;
+using EpochLegends.Core.Network;
 using EpochLegends.Core.HeroSelection.Registry;
 using EpochLegends.Core.UI.Manager;
 using EpochLegends.Systems.Team.Manager;
@@ -22,7 +22,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [SerializeField] private TeamManager teamManager;
         
         // Synced state
-        [SyncVar(hook = nameof(OnTimerChanged))]
+        [SyncVar(hook = nameof(UpdateTimerDisplay))]
         private float remainingTime = 60f;
         
         // Selection tracking
@@ -442,7 +442,8 @@ namespace EpochLegends.Core.HeroSelection.Manager
         
         #region Sync Var Hooks
         
-        private void OnTimerChanged(float oldValue, float newValue)
+        // This method is used as a hook for remainingTime SyncVar
+        private void UpdateTimerDisplay(float oldValue, float newValue)
         {
             // Update UI with new timer value
             Debug.Log($"Selection timer: {newValue:F1} seconds");

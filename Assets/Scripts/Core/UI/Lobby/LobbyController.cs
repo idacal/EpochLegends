@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EpochLegends.Systems.Team.Manager;
 using EpochLegends.Systems.Team.Assignment;
+using EpochLegends.Core.Network;
 
 namespace EpochLegends.UI.Lobby
 {
@@ -43,10 +44,6 @@ namespace EpochLegends.UI.Lobby
         // Cache de entradas de jugador en la UI
         private Dictionary<uint, PlayerUIInfo> currentPlayerInfos = new Dictionary<uint, PlayerUIInfo>();
         private Dictionary<uint, GameObject> playerEntries = new Dictionary<uint, GameObject>();
-        
-        // Tracking cuando se actualizó por última vez la UI
-        private float lastUIUpdateTime = 0f;
-        private float uiUpdateInterval = 0.5f; // Actualizar la UI cada medio segundo como máximo
 
         // Definición común de PlayerInfo para la UI
         public struct PlayerUIInfo
@@ -95,6 +92,9 @@ namespace EpochLegends.UI.Lobby
 
         private void Start()
         {
+            // Subscribirse a eventos de cambios de datos
+            EpochLegends.GameManager.OnPlayerDataChanged += OnPlayerDataChanged;
+            
             // Determinar si somos host
             isLocalPlayerHost = NetworkServer.active;
 
@@ -120,22 +120,41 @@ namespace EpochLegends.UI.Lobby
             
             // Solicitar actualización de UI
             PerformFullUIRefresh();
+            
+            // También programar un refresco retrasado para asegurar que la UI se actualice
+            // después de que toda la información de red esté disponible
+            Invoke(nameof(RequestSyncData), 0.5f);
+            Invoke(nameof(RequestSyncData), 1.5f);
         }
-
-        private void Update()
+        
+        private void RequestSyncData()
         {
-            // Limitar frecuencia de actualización de UI para no saturar
-            if (Time.time - lastUIUpdateTime > uiUpdateInterval)
-            {
-                UpdatePlayerCount();
-                UpdateStartButtonState();
-                UpdateWaitingForPlayersText();
-                RefreshPlayerList();
+            if (debugUpdates)
+                Debug.Log("[LobbyController] Requesting sync data");
                 
-                lastUIUpdateTime = Time.time;
+            // Solicitar datos del sincronizador si existe
+            var synchronizer = FindObjectOfType<LobbyDataSynchronizer>();
+            if (synchronizer != null)
+            {
+                synchronizer.ForceRefresh();
             }
         }
         
+        private void OnDestroy()
+        {
+            // Asegurarse de desuscribirse de eventos cuando el objeto se destruye
+            EpochLegends.GameManager.OnPlayerDataChanged -= OnPlayerDataChanged;
+        }
+        
+        private void OnPlayerDataChanged()
+        {
+            if (debugUpdates)
+                Debug.Log("[LobbyController] Player data changed event received - refreshing UI");
+                
+            // Actualizar UI cuando los datos de jugadores cambian
+            PerformFullUIRefresh();
+        }
+
         // Método público para permitir que otros componentes soliciten una actualización de UI
         public void RefreshUI()
         {
@@ -145,8 +164,67 @@ namespace EpochLegends.UI.Lobby
             PerformFullUIRefresh();
         }
         
+        // Nuevo método para actualizar la UI desde los datos del sincronizador
+        public void UpdateFromSyncData(string serverName, int playerCount, int maxPlayers, 
+                                     List<LobbyDataSynchronizer.SyncPlayerData> players)
+        {
+            if (debugUpdates)
+                Debug.Log($"[LobbyController] Updating from sync data: {serverName}, Players: {playerCount}/{maxPlayers}, Player count: {players.Count}");
+                
+            // Actualizar información del servidor
+            if (serverNameText != null)
+                serverNameText.text = $"Server: {serverName}";
+                
+            if (playerCountText != null)
+                playerCountText.text = $"Players: {playerCount}";
+                
+            // Actualizar visibilidad del texto "waiting for players"
+            if (waitingForPlayersText != null)
+                waitingForPlayersText.SetActive(playerCount < 2);
+                
+            // Actualizar estado del botón de inicio
+            UpdateStartButtonState();
+            
+            // Convertir los datos sincronizados a nuestro formato interno
+            Dictionary<uint, PlayerUIInfo> syncedPlayerInfos = new Dictionary<uint, PlayerUIInfo>();
+            
+            foreach (var playerData in players)
+            {
+                bool isHost = NetworkServer.active && NetworkClient.localPlayer != null && 
+                              NetworkClient.localPlayer.netId == playerData.netId;
+                              
+                syncedPlayerInfos[playerData.netId] = new PlayerUIInfo
+                {
+                    NetId = playerData.netId,
+                    PlayerName = playerData.playerName,
+                    TeamId = playerData.teamId,
+                    IsReady = playerData.isReady,
+                    IsHost = isHost
+                };
+                
+                // Si este es el jugador local, actualizar estado ready
+                if (NetworkClient.localPlayer != null && NetworkClient.localPlayer.netId == playerData.netId)
+                {
+                    bool oldReady = isPlayerReady;
+                    isPlayerReady = playerData.isReady;
+                    
+                    if (oldReady != isPlayerReady)
+                    {
+                        UpdateReadyButtonText();
+                    }
+                }
+            }
+            
+            // Refrescar la lista de jugadores con los datos sincronizados
+            RefreshPlayerListFromSync(syncedPlayerInfos);
+        }
+        
         private void PerformFullUIRefresh()
         {
+            // Verificar que estamos en la escena correcta antes de actualizar la UI
+            // en caso de que este componente no se haya destruido durante una transición de escena
+            if (!gameObject.activeInHierarchy) return;
+            
             UpdateServerInfo();
             UpdateTeamNames();
             UpdatePlayerCount();
@@ -154,7 +232,8 @@ namespace EpochLegends.UI.Lobby
             UpdateWaitingForPlayersText();
             RefreshPlayerList(true); // Force complete refresh
             
-            lastUIUpdateTime = Time.time;
+            if (debugUpdates)
+                Debug.Log("[LobbyController] Full UI refresh completed");
         }
 
         #region UI Updates
@@ -244,6 +323,41 @@ namespace EpochLegends.UI.Lobby
         #endregion
 
         #region Actualización de la Lista de Jugadores
+        
+        // Nuevo método para actualizar la lista desde los datos sincronizados
+        private void RefreshPlayerListFromSync(Dictionary<uint, PlayerUIInfo> updatedInfos)
+        {
+            if (debugUpdates)
+                Debug.Log($"[LobbyController] Refreshing player list from sync data. Players: {updatedInfos.Count}");
+                
+            // Limpiar todas las entradas actuales
+            foreach (var entry in playerEntries)
+            {
+                Destroy(entry.Value);
+            }
+            playerEntries.Clear();
+            
+            // Limpiar contenedores
+            foreach (var container in teamContainers)
+            {
+                if (container != null)
+                {
+                    for (int i = container.childCount - 1; i >= 0; i--)
+                    {
+                        Destroy(container.GetChild(i).gameObject);
+                    }
+                }
+            }
+
+            // Crear nuevas entradas para cada jugador
+            foreach (var info in updatedInfos)
+            {
+                CreatePlayerEntry(info.Value);
+            }
+            
+            // Actualizar nuestro cache de información de jugadores
+            currentPlayerInfos = updatedInfos;
+        }
 
         // Este método consulta a GameManager la lista de conexiones y reconstruye la lista de UI.
         private void RefreshPlayerList(bool forceFullRefresh = false)
@@ -298,63 +412,33 @@ namespace EpochLegends.UI.Lobby
                 }
             }
 
-            // Actualizamos la UI: agregamos nuevas entradas y removemos las que ya no están
-            // Agregar o actualizar entradas
-            foreach (var info in updatedInfos)
+            // Si estamos realizando un refresco completo o hay cambios, actualizamos la UI
+            if (forceFullRefresh || !ArePlayerInfosEqual(currentPlayerInfos, updatedInfos))
             {
-                if (playerEntries.ContainsKey(info.Key))
-                {
-                    // Update existing entry
-                    UpdatePlayerEntry(info.Key, info.Value);
-                }
-                else
-                {
-                    // Create new entry
-                    CreatePlayerEntry(info.Value);
+                if (debugUpdates)
+                    Debug.Log("[LobbyController] Player list has changed - updating UI");
                     
-                    if (debugUpdates)
-                        Debug.Log($"[LobbyController] Created UI entry for player {info.Key}");
-                }
+                RefreshPlayerListFromSync(updatedInfos);
             }
-
-            // Remover entradas que ya no están
-            List<uint> toRemove = playerEntries.Keys.Except(updatedInfos.Keys).ToList();
-            foreach (var netId in toRemove)
-            {
-                if (playerEntries.TryGetValue(netId, out GameObject entry))
-                {
-                    Destroy(entry);
-                    
-                    if (debugUpdates)
-                        Debug.Log($"[LobbyController] Removed UI entry for player {netId}");
-                }
-                playerEntries.Remove(netId);
-            }
-            
-            // Update current player infos
-            currentPlayerInfos = new Dictionary<uint, PlayerUIInfo>(updatedInfos);
         }
 
-        private void UpdatePlayerEntry(uint netId, PlayerUIInfo info)
+        private bool ArePlayerInfosEqual(Dictionary<uint, PlayerUIInfo> a, Dictionary<uint, PlayerUIInfo> b)
         {
-            if (playerEntries.TryGetValue(netId, out GameObject entry))
-            {
-                // Update player entry UI based on your prefab structure
-                // For example, update text components, ready indicator, etc.
-                Text entryText = entry.GetComponentInChildren<Text>();
-                if (entryText != null)
-                {
-                    entryText.text = info.PlayerName + (info.IsHost ? " (Host)" : "") + 
-                                    (info.IsReady ? " - Ready" : " - Not Ready");
-                }
+            if (a.Count != b.Count)
+                return false;
                 
-                // If you have separate ready indicator, update it too
-                Transform readyIndicator = entry.transform.Find("ReadyIndicator");
-                if (readyIndicator != null)
-                {
-                    readyIndicator.gameObject.SetActive(info.IsReady);
-                }
+            foreach (var kvp in a)
+            {
+                if (!b.TryGetValue(kvp.Key, out PlayerUIInfo otherInfo))
+                    return false;
+                    
+                if (kvp.Value.TeamId != otherInfo.TeamId || 
+                    kvp.Value.IsReady != otherInfo.IsReady ||
+                    kvp.Value.PlayerName != otherInfo.PlayerName)
+                    return false;
             }
+            
+            return true;
         }
 
         private void CreatePlayerEntry(PlayerUIInfo info)
@@ -384,6 +468,9 @@ namespace EpochLegends.UI.Lobby
                 }
                 
                 playerEntries[info.NetId] = entry;
+                
+                if (debugUpdates)
+                    Debug.Log($"[LobbyController] Created UI entry for player {info.NetId} on team {info.TeamId}");
             }
         }
 
@@ -459,6 +546,9 @@ namespace EpochLegends.UI.Lobby
                     Debug.Log($"[LobbyController] Requesting team change from {currentTeam} to {newTeam}");
                     
                 teamAssignment.RequestTeamChange(newTeam);
+                
+                // Solicitar actualización después de un breve retraso
+                Invoke(nameof(RequestSyncData), 0.5f);
             }
             else
             {
@@ -506,18 +596,4 @@ namespace EpochLegends.UI.Lobby
 
         #endregion
     }
-
-    // Messages are already defined in GameManager.cs, but keeping this for reference
-    /*
-    // Mensajes para la comunicación de estado "ready" y cambio de equipo
-    public struct ReadyStateMessage : NetworkMessage
-    {
-        public bool isReady;
-    }
-    
-    public struct TeamChangeMessage : NetworkMessage
-    {
-        public int teamId;
-    }
-    */
 }

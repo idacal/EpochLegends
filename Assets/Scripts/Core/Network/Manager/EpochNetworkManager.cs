@@ -15,6 +15,11 @@ namespace EpochLegends.Core.Network.Manager
         [SerializeField] private int maxPlayers = 10;
         [SerializeField] private bool debugNetwork = true;
 
+        // Evento para notificar actualizaciones del estado del juego
+        // Este es un cambio clave para un enfoque dirigido por eventos
+        public delegate void GameStateUpdateEvent();
+        public static event GameStateUpdateEvent OnGameStateUpdated;
+
         public string ServerName => serverName;
         public bool HasPassword => !string.IsNullOrEmpty(serverPassword);
         public int MaxPlayers => maxPlayers;
@@ -136,8 +141,8 @@ namespace EpochLegends.Core.Network.Manager
         {
             base.Update(); // Call base class Update first
             
-            // Periodically refresh for clients
-            if (NetworkClient.active && !NetworkServer.active)
+            // Periodically refresh for all clients (host y pure clients)
+            if (NetworkClient.active)
             {
                 if (Time.time - lastRefreshTime >= REFRESH_INTERVAL)
                 {
@@ -149,7 +154,7 @@ namespace EpochLegends.Core.Network.Manager
         
         private void RequestFullStateUpdate()
         {
-            if (NetworkClient.active && !NetworkServer.active)
+            if (NetworkClient.active)
             {
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Requesting full state update");
@@ -162,16 +167,16 @@ namespace EpochLegends.Core.Network.Manager
         {
             base.OnClientConnect();
             
-            if (!NetworkServer.active) // Pure client only (not host)
-            {
-                if (debugNetwork)
-                    Debug.Log("[NetworkManager] Client connected - requesting game state");
-                    
-                NetworkClient.Send(new GameStateRequestMessage());
+            // All clients should request game state (host and pure clients)
+            if (debugNetwork)
+                Debug.Log("[NetworkManager] Client connected - requesting game state");
                 
-                // Force refresh of server list for the newly connected client
-                Invoke(nameof(RequestFullStateUpdate), 1.0f);
-            }
+            NetworkClient.Send(new GameStateRequestMessage());
+            
+            // Force several refreshes to make sure data gets synced correctly
+            Invoke(nameof(RequestFullStateUpdate), 0.5f);
+            Invoke(nameof(RequestFullStateUpdate), 1.0f);
+            Invoke(nameof(RequestFullStateUpdate), 2.0f);
         }
         
         public override void OnServerSceneChanged(string sceneName)
@@ -211,8 +216,8 @@ namespace EpochLegends.Core.Network.Manager
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Client scene changed to: {SceneManager.GetActiveScene().name}");
             
-            // Request updated state for UI
-            if (NetworkClient.active && !NetworkServer.active)
+            // Request updated state for UI (for both host and pure clients)
+            if (NetworkClient.active)
             {
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Client scene changed - requesting state update");
@@ -220,6 +225,7 @@ namespace EpochLegends.Core.Network.Manager
                 NetworkClient.Send(new GameStateRequestMessage());
                 
                 // Force refresh after a short delay
+                Invoke(nameof(RequestFullStateUpdate), 0.5f);
                 Invoke(nameof(RequestFullStateUpdate), 1.0f);
             }
         }
@@ -269,9 +275,8 @@ namespace EpochLegends.Core.Network.Manager
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Received game state response: {msg.currentGameState}, Players: {msg.connectedPlayerCount}");
             
-            // Process the game state update
-            // Update any UI elements that need this information
-            RefreshClientUI();
+            // Trigger the game state updated event - esta es una mejora clave
+            OnGameStateUpdated?.Invoke();
         }
         
         [Server]
@@ -284,27 +289,6 @@ namespace EpochLegends.Core.Network.Manager
             if (EpochLegends.GameManager.Instance != null)
             {
                 EpochLegends.GameManager.Instance.SetPlayerReady(conn, msg.isReady);
-            }
-        }
-        
-        [Client]
-        private void RefreshClientUI()
-        {
-            // Find any LobbyController or LobbyUI instances and refresh them
-            EpochLegends.UI.Lobby.LobbyController lobbyController = FindObjectOfType<EpochLegends.UI.Lobby.LobbyController>();
-            if (lobbyController != null)
-            {
-                // If LobbyController has a public RefreshUI method, call it
-                if (typeof(EpochLegends.UI.Lobby.LobbyController).GetMethod("RefreshUI") != null)
-                {
-                    lobbyController.SendMessage("RefreshUI");
-                }
-            }
-            
-            EpochLegends.Core.UI.Lobby.LobbyUI lobbyUI = FindObjectOfType<EpochLegends.Core.UI.Lobby.LobbyUI>();
-            if (lobbyUI != null)
-            {
-                lobbyUI.RefreshUI();
             }
         }
     }

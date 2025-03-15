@@ -3,6 +3,7 @@ using Mirror;
 using System.Collections.Generic;
 using System;
 using EpochLegends.Core.Network;
+using EpochLegends.Core.Network.Manager;
 using EpochLegends.Core.Player;
 using EpochLegends.Core.Hero;
 
@@ -43,6 +44,10 @@ namespace EpochLegends
     {
         public static GameManager Instance { get; private set; }
 
+        // Evento para notificar cuando los datos de jugadores cambian
+        public delegate void PlayerDataChangedEvent();
+        public static event PlayerDataChangedEvent OnPlayerDataChanged;
+
         [Header("Game Configuration")]
         [SerializeField] private float heroSelectionTime = 60f;
         [SerializeField] private float gameStartCountdown = 5f;
@@ -58,7 +63,7 @@ namespace EpochLegends
         [SyncVar]
         private float _stateTimer = 0f;
         
-        // Use SyncDictionary with proper callbacks
+        // Use SyncDictionary for player data
         private readonly SyncDictionary<uint, PlayerInfo> _connectedPlayers = new SyncDictionary<uint, PlayerInfo>();
         
         // Connection to netId mapping (server-side only)
@@ -111,13 +116,20 @@ namespace EpochLegends
                 Debug.Log("[GameManager] Server started - registered message handlers");
         }
         
-        // Setup SyncDictionary callbacks
+        private void NotifyPlayerDataChanged()
+        {
+            if (_debugNetworkUpdates)
+                Debug.Log("[GameManager] Notifying player data changed");
+                
+            OnPlayerDataChanged?.Invoke();
+        }
+        
         public override void OnStartClient()
         {
             base.OnStartClient();
             
-            // In this version of Mirror, we don't use Callback directly
-            // Instead, we'll manually check for updates
+            // Register for network manager events
+            EpochNetworkManager.OnGameStateUpdated += OnNetworkGameStateUpdated;
             
             if (_debugNetworkUpdates)
                 Debug.Log("[GameManager] Client started");
@@ -128,6 +140,23 @@ namespace EpochLegends
                 // Give the connection a moment to establish
                 Invoke(nameof(RequestStateUpdate), 1f);
             }
+        }
+        
+        private void OnNetworkGameStateUpdated()
+        {
+            if (_debugNetworkUpdates)
+                Debug.Log("[GameManager] Game state updated event received");
+                
+            // Notify all subscribers that player data has changed
+            NotifyPlayerDataChanged();
+        }
+        
+        public override void OnStopClient()
+        {
+            base.OnStopClient();
+            
+            // Unregister from events when stopping client
+            EpochNetworkManager.OnGameStateUpdated -= OnNetworkGameStateUpdated;
         }
         
         [Client]
@@ -202,15 +231,31 @@ namespace EpochLegends
                 if (_debugNetworkUpdates)
                     Debug.Log($"[GameManager] Player joined. NetId: {netId}, Total players: {_connectedPlayers.Count}");
                 
-                // Explicitly notify the just-connected player about all current players
-                TargetSendFullPlayerList(conn);
-                
-                // Also broadcast a notification to all clients
+                // Explicitly notify all clients about the player joining
                 RpcPlayerJoined(netId, playerInfo.TeamId);
                 
-                // Force UI refresh
-                Invoke(nameof(ForceUIRefresh), 0.5f);
+                // Send the full state to the new client specifically
+                SendStateToClient(conn);
+                
+                // Explicitly tell all clients to refresh their UI after a short delay
+                // to ensure the SyncDictionary has tiempo de replicarse
+                Invoke(nameof(TriggerUIRefreshForAllClients), 0.5f);
             }
+        }
+        
+        [Server]
+        private void TriggerUIRefreshForAllClients()
+        {
+            RpcTriggerUIRefresh();
+        }
+        
+        [ClientRpc]
+        private void RpcTriggerUIRefresh()
+        {
+            if (_debugNetworkUpdates)
+                Debug.Log("[GameManager] Received UI refresh command from server");
+                
+            NotifyPlayerDataChanged();
         }
 
         [Server]
@@ -230,8 +275,8 @@ namespace EpochLegends
                     // Notify all clients about player leaving
                     RpcPlayerLeft(netId, playerInfo.TeamId);
                     
-                    // Force UI refresh
-                    Invoke(nameof(ForceUIRefresh), 0.5f);
+                    // Trigger UI refresh after a short delay
+                    Invoke(nameof(TriggerUIRefreshForAllClients), 0.5f);
                 }
             }
         }
@@ -250,6 +295,9 @@ namespace EpochLegends
                 
                 // Notify all clients about player ready state change
                 RpcPlayerReadyChanged(netId, isReady);
+
+                // Trigger UI refresh after a short delay
+                Invoke(nameof(TriggerUIRefreshForAllClients), 0.2f);
 
                 // Check if all players are ready
                 CheckAllPlayersReady();
@@ -271,14 +319,11 @@ namespace EpochLegends
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} joined team {teamId}");
                 
-            // No need to update dictionary here - it's already synced
-            // This is just to trigger UI updates specifically
+            // No need to update dictionary here - it's already synced via SyncDictionary
+            // This RPC ensures all clients are notified, including the host
             
-            // Force UI refresh on all clients
-            if (isClientOnly) // Only refresh UI on pure clients, not on host
-            {
-                RefreshLobbyUI();
-            }
+            // Notify subscribers that player data has changed
+            NotifyPlayerDataChanged();
         }
         
         [ClientRpc]
@@ -287,14 +332,11 @@ namespace EpochLegends
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} left from team {teamId}");
                 
-            // No need to update dictionary here - it's already synced
-            // This is just to trigger UI updates specifically
+            // No need to update dictionary here - it's already synced via SyncDictionary
+            // This RPC ensures all clients are notified, including the host
             
-            // Force UI refresh on all clients
-            if (isClientOnly) // Only refresh UI on pure clients, not on host
-            {
-                RefreshLobbyUI();
-            }
+            // Notify subscribers that player data has changed
+            NotifyPlayerDataChanged();
         }
         
         [ClientRpc]
@@ -303,66 +345,52 @@ namespace EpochLegends
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} ready state updated to {isReady}");
             
-            // No need to update dictionary - it's already synced
+            // No need to update dictionary - it's already synced via SyncDictionary
             // This is just an explicit notification for UI updates
             
-            // Force UI refresh on all clients
-            if (isClientOnly) // Only refresh UI on pure clients, not on host
-            {
-                RefreshLobbyUI();
-            }
+            // Notify subscribers that player data has changed
+            NotifyPlayerDataChanged();
         }
         
         [Server]
-        private void ForceUIRefresh()
-        {
-            RpcForceUIRefresh();
-        }
-        
-        [ClientRpc]
-        private void RpcForceUIRefresh()
+        public void SendStateToClient(NetworkConnection conn)
         {
             if (_debugNetworkUpdates)
-                Debug.Log("[GameManager] Force UI refresh requested");
+                Debug.Log($"[GameManager] Sending game state to client {conn}");
                 
-            RefreshLobbyUI();
+            // First send the current game state
+            GameStateResponseMessage response = new GameStateResponseMessage
+            {
+                connectedPlayerCount = _connectedPlayers.Count,
+                currentGameState = _currentState
+            };
+            
+            conn.Send(response);
+            
+            // Use TargetRpc to tell just this client to refresh its UI
+            TargetRefreshUI(conn);
         }
         
         [TargetRpc]
-        private void TargetSendFullPlayerList(NetworkConnection target)
+        private void TargetRefreshUI(NetworkConnection target)
         {
             if (_debugNetworkUpdates)
-                Debug.Log($"[GameManager] Sending full player list to newly connected client");
-                
-            // The player list will already be synced by Mirror, but we're sending
-            // an explicit notification to trigger UI update
+                Debug.Log("[GameManager] Received explicit UI refresh command from server");
             
-            // Force UI refresh after a short delay to ensure everything is initialized
-            Invoke(nameof(RefreshLobbyUI), 0.5f);
+            // Notify subscribers that player data has changed
+            NotifyPlayerDataChanged();
         }
         
-        // Helper method to refresh the lobby UI
-        private void RefreshLobbyUI()
+        // Game state change callback
+        private void OnGameStateChanged(GameState oldState, GameState newState)
         {
             if (_debugNetworkUpdates)
-                Debug.Log("[GameManager] Refreshing lobby UI");
+                Debug.Log($"[GameManager] Game state changed from {oldState} to {newState}");
                 
-            // Find and update any LobbyController or LobbyUI instances
-            var lobbyUI = FindObjectOfType<EpochLegends.Core.UI.Lobby.LobbyUI>();
-            if (lobbyUI != null)
+            // Notify subscribers that game state has changed
+            if (isClient)
             {
-                lobbyUI.RefreshUI();
-            }
-            
-            // Also update the other lobby controller if it exists
-            EpochLegends.UI.Lobby.LobbyController lobbyController = FindObjectOfType<EpochLegends.UI.Lobby.LobbyController>();
-            if (lobbyController != null)
-            {
-                // This is a direct call and might need to be adapted based on your implementation
-                if (typeof(EpochLegends.UI.Lobby.LobbyController).GetMethod("RefreshUI") != null)
-                {
-                    lobbyController.SendMessage("RefreshUI");
-                }
+                NotifyPlayerDataChanged();
             }
         }
 
@@ -462,7 +490,8 @@ namespace EpochLegends
                 Debug.Log($"[GameManager] Game state changed to {newState}");
                 
             // This RPC explicitly notifies clients about state changes
-            // Can be used to trigger UI updates or other state-dependent actions
+            // Notify subscribers that game state has changed
+            NotifyPlayerDataChanged();
         }
 
         [Server]
@@ -487,42 +516,6 @@ namespace EpochLegends
             NetworkManager.singleton.ServerChangeScene(lobbyScene);
                 
             Debug.Log("Returning to lobby");
-        }
-        
-        [Server]
-        public void SendStateToClient(NetworkConnection conn)
-        {
-            if (_debugNetworkUpdates)
-                Debug.Log($"[GameManager] Sending game state to client {conn}");
-                
-            // First send the current game state
-            GameStateResponseMessage response = new GameStateResponseMessage
-            {
-                connectedPlayerCount = _connectedPlayers.Count,
-                currentGameState = _currentState
-            };
-            
-            conn.Send(response);
-            
-            // Then explicitly tell the client to refresh its UI
-            TargetRefreshUI(conn);
-        }
-        
-        [TargetRpc]
-        private void TargetRefreshUI(NetworkConnection target)
-        {
-            if (_debugNetworkUpdates)
-                Debug.Log("[GameManager] Received explicit UI refresh command from server");
-            
-            // Force all UI elements to refresh
-            Invoke(nameof(RefreshLobbyUI), 0.2f); // Small delay to ensure all data is synced
-        }
-        
-        // Game state change callback
-        private void OnGameStateChanged(GameState oldState, GameState newState)
-        {
-            Debug.Log($"Game state changed from {oldState} to {newState}");
-            // Update UI based on game state
         }
         
         // Added for compatibility with HeroFactory

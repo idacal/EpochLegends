@@ -4,6 +4,7 @@ using Mirror;
 using System.Collections.Generic;
 using EpochLegends.Core.Network.Manager;
 using EpochLegends;
+using EpochLegends.Core.Network;
 
 namespace EpochLegends.Core.UI.Lobby
 {
@@ -31,13 +32,6 @@ namespace EpochLegends.Core.UI.Lobby
         private Dictionary<uint, GameObject> playerEntries = new Dictionary<uint, GameObject>();
         private bool isReady = false;
         
-        // Last update time to prevent excessive refreshes
-        private float lastRefreshTime = 0f;
-        private const float REFRESH_INTERVAL = 0.5f;
-        
-        // Flag to force a full refresh
-        private bool forceRefresh = false;
-        
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -63,52 +57,96 @@ namespace EpochLegends.Core.UI.Lobby
                 
             if (leaveButton != null)
                 leaveButton.onClick.AddListener(OnLeaveClicked);
-                
+            
+            // Subscribirse a eventos de cambios de datos
+            GameManager.OnPlayerDataChanged += OnPlayerDataChanged;
+            
             // Initial UI update
             if (debugUI)
                 Debug.Log("[LobbyUI] Starting initial UI refresh");
                 
             RefreshUI();
             
-            // Check if we're the host
-            bool isHost = NetworkServer.active;
+            // Request refresh from synchronizer
+            Invoke(nameof(RequestSyncData), 0.5f);
+        }
+        
+        private void RequestSyncData()
+        {
             if (debugUI)
-                Debug.Log($"[LobbyUI] Started. Is host: {isHost}");
+                Debug.Log("[LobbyUI] Requesting sync data");
                 
-            // Request server for player list if we are a client
-            if (NetworkClient.active && !NetworkServer.active)
+            // Solicitar datos del sincronizador si existe
+            var synchronizer = FindObjectOfType<LobbyDataSynchronizer>();
+            if (synchronizer != null)
             {
-                if (debugUI)
-                    Debug.Log("[LobbyUI] Requesting player list from server");
-                
-                // Allow time for connections to stabilize
-                Invoke(nameof(RequestPlayerList), 1.0f);
+                synchronizer.ForceRefresh();
             }
         }
         
-        private void Update()
+        private void OnDestroy()
         {
-            // Only refresh periodically or when forced to avoid excessive UI updates
-            if (forceRefresh || Time.time - lastRefreshTime > REFRESH_INTERVAL)
-            {
-                if (debugUI && forceRefresh)
-                    Debug.Log("[LobbyUI] Forced UI refresh");
-                    
-                RefreshUI();
-                forceRefresh = false;
-                lastRefreshTime = Time.time;
-            }
+            // Asegurarse de desuscribirse de eventos cuando el objeto se destruye
+            GameManager.OnPlayerDataChanged -= OnPlayerDataChanged;
         }
         
-        private void RequestPlayerList()
+        private void OnPlayerDataChanged()
         {
-            if (NetworkClient.active)
+            if (debugUI)
+                Debug.Log("[LobbyUI] Player data changed event received - refreshing UI");
+                
+            // Actualizar UI cuando los datos de jugadores cambian
+            RefreshUI();
+        }
+        
+        // Nuevo método para actualizar la UI desde los datos del sincronizador
+        public void UpdateFromSyncData(string serverName, int playerCount, int maxPlayers, 
+                                     List<LobbyDataSynchronizer.SyncPlayerData> players)
+        {
+            if (debugUI)
+                Debug.Log($"[LobbyUI] Updating from sync data: {serverName}, Players: {playerCount}/{maxPlayers}, Player count: {players.Count}");
+                
+            // Actualizar información del servidor
+            if (serverNameText != null)
+                serverNameText.text = serverName;
+                
+            if (playerCountText != null)
+                playerCountText.text = $"Players: {playerCount}/{maxPlayers}";
+                
+            // Limpiar entradas actuales
+            ClearPlayerList();
+            
+            // Crear nuevas entradas con los datos sincronizados
+            foreach (var playerData in players)
             {
-                if (debugUI)
-                    Debug.Log("[LobbyUI] Sending game state request");
+                bool isLocalPlayer = NetworkClient.localPlayer != null && 
+                                     NetworkClient.localPlayer.netId == playerData.netId;
+                                     
+                // Si este es el jugador local, actualizar estado ready
+                if (isLocalPlayer)
+                {
+                    bool wasReady = isReady;
+                    isReady = playerData.isReady;
                     
-                // Send a request for game state update
-                NetworkClient.Send(new EpochLegends.Core.Network.GameStateRequestMessage());
+                    if (wasReady != isReady && readyButton != null)
+                    {
+                        Text buttonText = readyButton.GetComponentInChildren<Text>();
+                        if (buttonText != null)
+                            buttonText.text = isReady ? "Not Ready" : "Ready";
+                            
+                        if (debugUI)
+                            Debug.Log($"[LobbyUI] Updated local player ready button: {buttonText.text}");
+                    }
+                }
+                
+                // Crear entrada en la UI
+                CreatePlayerEntry(
+                    playerData.netId,
+                    playerData.playerName,
+                    playerData.teamId,
+                    isLocalPlayer,
+                    playerData.isReady
+                );
             }
         }
         
@@ -189,10 +227,12 @@ namespace EpochLegends.Core.UI.Lobby
                         
                         if (wasReady != isReady && readyButton != null)
                         {
-                            readyButton.GetComponentInChildren<Text>().text = isReady ? "Not Ready" : "Ready";
+                            Text buttonText = readyButton.GetComponentInChildren<Text>();
+                            if (buttonText != null)
+                                buttonText.text = isReady ? "Not Ready" : "Ready";
                             
                             if (debugUI)
-                                Debug.Log($"[LobbyUI] Updated local player ready button: {readyButton.GetComponentInChildren<Text>().text}");
+                                Debug.Log($"[LobbyUI] Updated local player ready button: {buttonText.text}");
                         }
                     }
                     
@@ -274,7 +314,11 @@ namespace EpochLegends.Core.UI.Lobby
             
             // Update UI
             if (readyButton != null)
-                readyButton.GetComponentInChildren<Text>().text = isReady ? "Not Ready" : "Ready";
+            {
+                Text buttonText = readyButton.GetComponentInChildren<Text>();
+                if (buttonText != null)
+                    buttonText.text = isReady ? "Not Ready" : "Ready";
+            }
                 
             // Update ready status for local player
             if (NetworkClient.active && NetworkClient.localPlayer != null)
@@ -334,18 +378,13 @@ namespace EpochLegends.Core.UI.Lobby
                 int newTeam = (currentTeam == 1) ? 2 : 1;
                 teamAssignment.RequestTeamChange(newTeam);
                 
-                // Force refresh after a short delay to give time for server to process
-                Invoke(nameof(ForceUIRefresh), 0.5f);
+                // Request refresh after a short delay
+                Invoke(nameof(RequestSyncData), 0.5f);
             }
             else
             {
                 Debug.LogWarning("[LobbyUI] TeamAssignment not found in scene");
             }
-        }
-        
-        private void ForceUIRefresh()
-        {
-            forceRefresh = true;
         }
         
         private void OnLeaveClicked()

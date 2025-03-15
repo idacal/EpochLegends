@@ -47,6 +47,9 @@ namespace EpochLegends.Core.UI.Lobby
             }
             
             Instance = this;
+            
+            if (debugUI)
+                Debug.Log("[LobbyUI] Initialized");
         }
         
         private void Start()
@@ -62,6 +65,9 @@ namespace EpochLegends.Core.UI.Lobby
                 leaveButton.onClick.AddListener(OnLeaveClicked);
                 
             // Initial UI update
+            if (debugUI)
+                Debug.Log("[LobbyUI] Starting initial UI refresh");
+                
             RefreshUI();
             
             // Check if we're the host
@@ -85,6 +91,9 @@ namespace EpochLegends.Core.UI.Lobby
             // Only refresh periodically or when forced to avoid excessive UI updates
             if (forceRefresh || Time.time - lastRefreshTime > REFRESH_INTERVAL)
             {
+                if (debugUI && forceRefresh)
+                    Debug.Log("[LobbyUI] Forced UI refresh");
+                    
                 RefreshUI();
                 forceRefresh = false;
                 lastRefreshTime = Time.time;
@@ -95,18 +104,21 @@ namespace EpochLegends.Core.UI.Lobby
         {
             if (NetworkClient.active)
             {
+                if (debugUI)
+                    Debug.Log("[LobbyUI] Sending game state request");
+                    
                 // Send a request for game state update
-                NetworkClient.Send(new GameStateRequestMessage());
+                NetworkClient.Send(new EpochLegends.Core.Network.GameStateRequestMessage());
             }
         }
         
         public void RefreshUI()
         {
+            if (debugUI)
+                Debug.Log("[LobbyUI] Refreshing UI");
+                
             UpdateServerInfo();
             RefreshPlayerList();
-            
-            if (debugUI)
-                Debug.Log("[LobbyUI] UI Refreshed");
         }
         
         private void UpdateServerInfo()
@@ -114,7 +126,12 @@ namespace EpochLegends.Core.UI.Lobby
             if (EpochNetworkManager.Instance != null)
             {
                 if (serverNameText != null)
+                {
                     serverNameText.text = EpochNetworkManager.Instance.ServerName;
+                    
+                    if (debugUI)
+                        Debug.Log($"[LobbyUI] Set server name to: {serverNameText.text}");
+                }
             }
             
             if (playerCountText != null && GameManager.Instance != null)
@@ -140,7 +157,7 @@ namespace EpochLegends.Core.UI.Lobby
             ClearPlayerList();
             
             // Get player list from GameManager
-            if (GameManager.Instance != null && GameManager.Instance.ConnectedPlayers != null)
+            if (GameManager.Instance != null)
             {
                 var players = GameManager.Instance.ConnectedPlayers;
                 
@@ -173,6 +190,9 @@ namespace EpochLegends.Core.UI.Lobby
                         if (wasReady != isReady && readyButton != null)
                         {
                             readyButton.GetComponentInChildren<Text>().text = isReady ? "Not Ready" : "Ready";
+                            
+                            if (debugUI)
+                                Debug.Log($"[LobbyUI] Updated local player ready button: {readyButton.GetComponentInChildren<Text>().text}");
                         }
                     }
                     
@@ -188,7 +208,7 @@ namespace EpochLegends.Core.UI.Lobby
             }
             else if (debugUI)
             {
-                Debug.LogWarning("[LobbyUI] GameManager or ConnectedPlayers is null");
+                Debug.LogWarning("[LobbyUI] GameManager is null");
             }
         }
         
@@ -207,6 +227,9 @@ namespace EpochLegends.Core.UI.Lobby
                 
             if (team2Container != null)
                 ClearContainer(team2Container);
+                
+            if (debugUI)
+                Debug.Log("[LobbyUI] Cleared player list");
         }
         
         private void ClearContainer(Transform container)
@@ -254,7 +277,7 @@ namespace EpochLegends.Core.UI.Lobby
                 readyButton.GetComponentInChildren<Text>().text = isReady ? "Not Ready" : "Ready";
                 
             // Update ready status for local player
-            if (GameManager.Instance != null && NetworkClient.localPlayer != null)
+            if (NetworkClient.active && NetworkClient.localPlayer != null)
             {
                 // Send ready status to server
                 CmdSetPlayerReady(isReady);

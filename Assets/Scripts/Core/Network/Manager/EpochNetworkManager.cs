@@ -1,6 +1,7 @@
 using UnityEngine;
 using Mirror;
 using UnityEngine.SceneManagement;
+using EpochLegends.Core.Network; // Add this import to access the message types
 
 namespace EpochLegends.Core.Network.Manager
 {
@@ -54,7 +55,7 @@ namespace EpochLegends.Core.Network.Manager
             
             // Register message handlers
             NetworkServer.RegisterHandler<ServerPasswordMessage>(OnServerPasswordMessage);
-            NetworkServer.RegisterHandler<EpochLegends.GameStateRequestMessage>(OnGameStateRequestMessage);
+            NetworkServer.RegisterHandler<GameStateRequestMessage>(OnGameStateRequestMessage);
             NetworkServer.RegisterHandler<EpochLegends.ReadyStateMessage>(OnReadyStateMessage);
             
             StartHost();
@@ -123,12 +124,18 @@ namespace EpochLegends.Core.Network.Manager
             if (debugNetwork)
                 Debug.Log("[NetworkManager] Client started - registering message handlers");
             
+            // Register client-side message handlers
+            NetworkClient.RegisterHandler<GameStateResponseMessage>(OnGameStateResponseMessage);
+            
             // Force refresh of server list for all connected clients
             Invoke(nameof(RequestFullStateUpdate), 1.0f);
         }
         
-        private void Update()
+        // Override keyword to properly extend the base class method
+        public override void Update()
         {
+            base.Update(); // Call base class Update first
+            
             // Periodically refresh for clients
             if (NetworkClient.active && !NetworkServer.active)
             {
@@ -147,7 +154,7 @@ namespace EpochLegends.Core.Network.Manager
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Requesting full state update");
                     
-                NetworkClient.Send(new EpochLegends.GameStateRequestMessage());
+                NetworkClient.Send(new GameStateRequestMessage());
             }
         }
         
@@ -160,7 +167,7 @@ namespace EpochLegends.Core.Network.Manager
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Client connected - requesting game state");
                     
-                NetworkClient.Send(new EpochLegends.GameStateRequestMessage());
+                NetworkClient.Send(new GameStateRequestMessage());
                 
                 // Force refresh of server list for the newly connected client
                 Invoke(nameof(RequestFullStateUpdate), 1.0f);
@@ -210,7 +217,7 @@ namespace EpochLegends.Core.Network.Manager
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Client scene changed - requesting state update");
                     
-                NetworkClient.Send(new EpochLegends.GameStateRequestMessage());
+                NetworkClient.Send(new GameStateRequestMessage());
                 
                 // Force refresh after a short delay
                 Invoke(nameof(RequestFullStateUpdate), 1.0f);
@@ -235,7 +242,7 @@ namespace EpochLegends.Core.Network.Manager
         }
         
         [Server]
-        private void OnGameStateRequestMessage(NetworkConnectionToClient conn, EpochLegends.GameStateRequestMessage msg)
+        private void OnGameStateRequestMessage(NetworkConnectionToClient conn, GameStateRequestMessage msg)
         {
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Received game state request from client {conn.connectionId}");
@@ -243,7 +250,7 @@ namespace EpochLegends.Core.Network.Manager
             // Send current game state to the requesting client
             if (EpochLegends.GameManager.Instance != null)
             {
-                var responseMsg = new EpochLegends.GameStateResponseMessage
+                var responseMsg = new GameStateResponseMessage
                 {
                     connectedPlayerCount = EpochLegends.GameManager.Instance.ConnectedPlayerCount,
                     currentGameState = EpochLegends.GameManager.Instance.CurrentState
@@ -254,6 +261,17 @@ namespace EpochLegends.Core.Network.Manager
                 // Also have the GameManager send its specific state data
                 EpochLegends.GameManager.Instance.SendStateToClient(conn);
             }
+        }
+        
+        [Client]
+        private void OnGameStateResponseMessage(GameStateResponseMessage msg)
+        {
+            if (debugNetwork)
+                Debug.Log($"[NetworkManager] Received game state response: {msg.currentGameState}, Players: {msg.connectedPlayerCount}");
+            
+            // Process the game state update
+            // Update any UI elements that need this information
+            RefreshClientUI();
         }
         
         [Server]

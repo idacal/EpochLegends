@@ -694,4 +694,6 @@ namespace EpochLegends.Core.HeroSelection.Manager
         
         #endregion
     }
+
+    
 }

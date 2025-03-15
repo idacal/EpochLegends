@@ -9,7 +9,6 @@ using EpochLegends.Systems.Team.Assignment;
 
 namespace EpochLegends.UI.Lobby
 {
-    // Usamos MonoBehaviour porque la UI no necesita ser un NetworkBehaviour
     public class LobbyController : MonoBehaviour
     {
         [Header("Server Info")]
@@ -28,6 +27,9 @@ namespace EpochLegends.UI.Lobby
         [SerializeField] private Button startGameButton;
         [SerializeField] private Button teamSwitchButton;
         [SerializeField] private Button disconnectButton;
+        
+        [Header("Debug")]
+        [SerializeField] private bool debugUpdates = true;
 
         // Referencias a otros managers
         private TeamManager teamManager;
@@ -41,6 +43,10 @@ namespace EpochLegends.UI.Lobby
         // Cache de entradas de jugador en la UI
         private Dictionary<uint, PlayerUIInfo> currentPlayerInfos = new Dictionary<uint, PlayerUIInfo>();
         private Dictionary<uint, GameObject> playerEntries = new Dictionary<uint, GameObject>();
+        
+        // Tracking cuando se actualizó por última vez la UI
+        private float lastUIUpdateTime = 0f;
+        private float uiUpdateInterval = 0.5f; // Actualizar la UI cada medio segundo como máximo
 
         // Definición común de PlayerInfo para la UI
         public struct PlayerUIInfo
@@ -54,6 +60,14 @@ namespace EpochLegends.UI.Lobby
 
         private void Awake()
         {
+            FindManagers();
+            
+            // Configurar listeners de botones
+            SetupButtonListeners();
+        }
+        
+        private void FindManagers()
+        {
             teamManager = FindObjectOfType<TeamManager>();
             teamAssignment = FindObjectOfType<TeamAssignment>();
             gameManager = FindObjectOfType<EpochLegends.GameManager>();
@@ -62,14 +76,19 @@ namespace EpochLegends.UI.Lobby
             {
                 Debug.LogError("No se encontraron los managers requeridos en la escena.");
             }
-
-            // Configurar listeners de botones
+        }
+        
+        private void SetupButtonListeners()
+        {
             if (readyButton != null)
                 readyButton.onClick.AddListener(OnReadyButtonClicked);
+                
             if (startGameButton != null)
                 startGameButton.onClick.AddListener(OnStartGameClicked);
+                
             if (teamSwitchButton != null)
                 teamSwitchButton.onClick.AddListener(OnTeamSwitchClicked);
+                
             if (disconnectButton != null)
                 disconnectButton.onClick.AddListener(OnDisconnectClicked);
         }
@@ -80,23 +99,11 @@ namespace EpochLegends.UI.Lobby
             isLocalPlayerHost = NetworkServer.active;
 
             // Actualizar UI según el rol
-            if (isLocalPlayerHost)
-            {
-                if (startGameButton != null)
-                    startGameButton.gameObject.SetActive(true);
-            }
-            else
-            {
-                if (startGameButton != null)
-                    startGameButton.gameObject.SetActive(false);
-            }
-
+            UpdateHostUI();
+            
             // Configurar información del servidor
-            if (serverNameText != null)
-            {
-                serverNameText.text = $"Server: {GetServerName()}";
-            }
-
+            UpdateServerInfo();
+            
             // Inicializar nombres de equipos
             UpdateTeamNames();
 
@@ -110,26 +117,81 @@ namespace EpochLegends.UI.Lobby
             {
                 NetworkClient.RegisterHandler<ReadyStateMessage>(OnReadyStateMessage);
             }
+            
+            // Solicitar actualización de UI
+            PerformFullUIRefresh();
         }
 
         private void Update()
         {
+            // Limitar frecuencia de actualización de UI para no saturar
+            if (Time.time - lastUIUpdateTime > uiUpdateInterval)
+            {
+                UpdatePlayerCount();
+                UpdateStartButtonState();
+                UpdateWaitingForPlayersText();
+                RefreshPlayerList();
+                
+                lastUIUpdateTime = Time.time;
+            }
+        }
+        
+        // Método público para permitir que otros componentes soliciten una actualización de UI
+        public void RefreshUI()
+        {
+            if (debugUpdates)
+                Debug.Log("[LobbyController] RefreshUI called - performing full UI refresh");
+                
+            PerformFullUIRefresh();
+        }
+        
+        private void PerformFullUIRefresh()
+        {
+            UpdateServerInfo();
+            UpdateTeamNames();
             UpdatePlayerCount();
             UpdateStartButtonState();
             UpdateWaitingForPlayersText();
-            RefreshPlayerList();
+            RefreshPlayerList(true); // Force complete refresh
+            
+            lastUIUpdateTime = Time.time;
         }
 
         #region UI Updates
 
+        private void UpdateHostUI()
+        {
+            if (startGameButton != null)
+                startGameButton.gameObject.SetActive(isLocalPlayerHost);
+        }
+        
+        private void UpdateServerInfo()
+        {
+            if (serverNameText != null)
+            {
+                string serverName = GetServerName();
+                serverNameText.text = $"Server: {serverName}";
+                
+                if (debugUpdates)
+                    Debug.Log($"[LobbyController] Updated server name: {serverName}");
+            }
+        }
+        
         private string GetServerName()
         {
+            // Attempt to get server name from NetworkManager
+            if (Mirror.NetworkManager.singleton is EpochLegends.Core.Network.Manager.EpochNetworkManager networkManager)
+            {
+                return networkManager.ServerName;
+            }
+            
             return "Epoch Legends Server";
         }
 
         private void UpdateTeamNames()
         {
             if (teamManager == null) return;
+            
             for (int i = 0; i < teamContainers.Length && i < teamNameTexts.Length; i++)
             {
                 var config = teamManager.GetTeamConfig(i + 1); // Suponiendo que los IDs de equipo inician en 1
@@ -147,6 +209,9 @@ namespace EpochLegends.UI.Lobby
             {
                 int count = gameManager.ConnectedPlayerCount;
                 playerCountText.text = $"Players: {count}";
+                
+                if (debugUpdates)
+                    Debug.Log($"[LobbyController] Updated player count: {count}");
             }
         }
 
@@ -181,7 +246,7 @@ namespace EpochLegends.UI.Lobby
         #region Actualización de la Lista de Jugadores
 
         // Este método consulta a GameManager la lista de conexiones y reconstruye la lista de UI.
-        private void RefreshPlayerList()
+        private void RefreshPlayerList(bool forceFullRefresh = false)
         {
             if (gameManager == null) return;
 
@@ -190,6 +255,9 @@ namespace EpochLegends.UI.Lobby
 
             // Get the ConnectedPlayers dictionary from GameManager - this now uses uint (NetID) as keys
             var connectedPlayers = gameManager.ConnectedPlayers;
+            
+            if (debugUpdates && forceFullRefresh)
+                Debug.Log($"[LobbyController] Refreshing player list. Connected players: {connectedPlayers.Count}");
             
             foreach (var kvp in connectedPlayers)
             {
@@ -220,8 +288,13 @@ namespace EpochLegends.UI.Lobby
                 // Update local player's ready state
                 if (NetworkClient.localPlayer != null && NetworkClient.localPlayer.netId == netId)
                 {
+                    bool oldReady = isPlayerReady;
                     isPlayerReady = ready;
-                    UpdateReadyButtonText();
+                    
+                    if (oldReady != isPlayerReady)
+                    {
+                        UpdateReadyButtonText();
+                    }
                 }
             }
 
@@ -238,6 +311,9 @@ namespace EpochLegends.UI.Lobby
                 {
                     // Create new entry
                     CreatePlayerEntry(info.Value);
+                    
+                    if (debugUpdates)
+                        Debug.Log($"[LobbyController] Created UI entry for player {info.Key}");
                 }
             }
 
@@ -248,6 +324,9 @@ namespace EpochLegends.UI.Lobby
                 if (playerEntries.TryGetValue(netId, out GameObject entry))
                 {
                     Destroy(entry);
+                    
+                    if (debugUpdates)
+                        Debug.Log($"[LobbyController] Removed UI entry for player {netId}");
                 }
                 playerEntries.Remove(netId);
             }
@@ -270,7 +349,11 @@ namespace EpochLegends.UI.Lobby
                 }
                 
                 // If you have separate ready indicator, update it too
-                // ...
+                Transform readyIndicator = entry.transform.Find("ReadyIndicator");
+                if (readyIndicator != null)
+                {
+                    readyIndicator.gameObject.SetActive(info.IsReady);
+                }
             }
         }
 
@@ -291,6 +374,13 @@ namespace EpochLegends.UI.Lobby
                 {
                     entryText.text = info.PlayerName + (info.IsHost ? " (Host)" : "") +
                                     (info.IsReady ? " - Ready" : " - Not Ready");
+                }
+                
+                // If you have a ready indicator, update it
+                Transform readyIndicator = entry.transform.Find("ReadyIndicator");
+                if (readyIndicator != null)
+                {
+                    readyIndicator.gameObject.SetActive(info.IsReady);
                 }
                 
                 playerEntries[info.NetId] = entry;
@@ -322,6 +412,9 @@ namespace EpochLegends.UI.Lobby
             // Enviar el estado "ready" al servidor
             if (NetworkClient.active && NetworkClient.localPlayer != null)
             {
+                if (debugUpdates)
+                    Debug.Log($"[LobbyController] Sending ready state: {isPlayerReady}");
+                    
                 // Sending ready state message
                 NetworkClient.Send(new ReadyStateMessage
                 {
@@ -338,6 +431,9 @@ namespace EpochLegends.UI.Lobby
             {
                 if (CheckAllPlayersReady())
                 {
+                    if (debugUpdates)
+                        Debug.Log("[LobbyController] Starting hero selection phase");
+                        
                     gameManager.StartHeroSelection();
                 }
                 else
@@ -358,6 +454,10 @@ namespace EpochLegends.UI.Lobby
             {
                 int currentTeam = GetLocalPlayerTeam();
                 int newTeam = (currentTeam == 1) ? 2 : 1;
+                
+                if (debugUpdates)
+                    Debug.Log($"[LobbyController] Requesting team change from {currentTeam} to {newTeam}");
+                    
                 teamAssignment.RequestTeamChange(newTeam);
             }
             else
@@ -370,6 +470,9 @@ namespace EpochLegends.UI.Lobby
         {
             if (NetworkClient.active)
             {
+                if (debugUpdates)
+                    Debug.Log("[LobbyController] Disconnecting from server");
+                    
                 if (NetworkServer.active)
                 {
                     NetworkManager.singleton.StopHost();
@@ -397,12 +500,15 @@ namespace EpochLegends.UI.Lobby
         private void OnReadyStateMessage(ReadyStateMessage message)
         {
             // This is a client-side handler
-            Debug.Log($"Ready state message received: {message.isReady}");
+            if (debugUpdates)
+                Debug.Log($"[LobbyController] Ready state message received: {message.isReady}");
         }
 
         #endregion
     }
 
+    // Messages are already defined in GameManager.cs, but keeping this for reference
+    /*
     // Mensajes para la comunicación de estado "ready" y cambio de equipo
     public struct ReadyStateMessage : NetworkMessage
     {
@@ -413,4 +519,5 @@ namespace EpochLegends.UI.Lobby
     {
         public int teamId;
     }
+    */
 }

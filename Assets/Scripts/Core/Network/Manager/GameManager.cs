@@ -1,33 +1,38 @@
 using UnityEngine;
-using Mirror;
+using Mirror; // Para NetworkBehaviour
 using System.Collections.Generic;
 using EpochLegends.Core.Network.Manager;
 using EpochLegends.Core.Player;
+using EpochLegends.Core.UI.Manager;
+using EpochLegends.Core.Hero;
 
 namespace EpochLegends
 {
     public enum GameState
     {
+        MainMenu,
         Lobby,
         HeroSelection,
         Playing,
         GameOver
     }
 
-    public class GameManager : MonoBehaviour
+    // Cambiamos de MonoBehaviour a NetworkBehaviour para poder usar RPC
+    public class GameManager : NetworkBehaviour
     {
         public static GameManager Instance { get; private set; }
 
         [Header("Game Configuration")]
         [SerializeField] private float heroSelectionTime = 60f;
-        [SerializeField] private float countdownBeforeGameStart = 5f;
+        [SerializeField] private float gameStartCountdown = 5f;
         
         [Header("Scene References")]
+        [SerializeField] private string mainMenuScene = "MainMenu";
         [SerializeField] private string lobbyScene = "Lobby";
         [SerializeField] private string heroSelectionScene = "HeroSelection";
         [SerializeField] private string gameplayScene = "Gameplay";
 
-        private GameState _currentState = GameState.Lobby;
+        private GameState _currentState = GameState.MainMenu;
         private float _stateTimer = 0f;
         private Dictionary<NetworkConnection, PlayerInfo> _connectedPlayers = new Dictionary<NetworkConnection, PlayerInfo>();
 
@@ -79,6 +84,13 @@ namespace EpochLegends
             }
         }
 
+        public void OnServerStarted()
+        {
+            // This gets called when the EpochNetworkManager starts the server
+            SetGameState(GameState.Lobby);
+            Debug.Log("GameManager notified of server start");
+        }
+
         public void OnPlayerJoined(NetworkConnection conn)
         {
             if (!_connectedPlayers.ContainsKey(conn))
@@ -92,6 +104,12 @@ namespace EpochLegends
                 
                 _connectedPlayers.Add(conn, playerInfo);
                 Debug.Log($"Player joined. Total players: {_connectedPlayers.Count}");
+                
+                // Notify clients to update lobby UI
+                if (_currentState == GameState.Lobby)
+                {
+                    UpdateLobbyUI();
+                }
             }
         }
 
@@ -101,13 +119,13 @@ namespace EpochLegends
             {
                 _connectedPlayers.Remove(conn);
                 Debug.Log($"Player left. Total players: {_connectedPlayers.Count}");
+                
+                // Notify clients to update lobby UI
+                if (_currentState == GameState.Lobby)
+                {
+                    UpdateLobbyUI();
+                }
             }
-        }
-        
-        public void OnHeroCreated(Core.Hero.Hero hero)
-        {
-            // Handle hero creation
-            Debug.Log($"Hero created: {hero.name}");
         }
 
         public void SetPlayerReady(NetworkConnection conn, bool isReady)
@@ -118,9 +136,24 @@ namespace EpochLegends
                 playerInfo.IsReady = isReady;
                 _connectedPlayers[conn] = playerInfo;
 
+                // Update lobby UI
+                UpdateLobbyUI();
+                
                 // Check if all players are ready
                 CheckAllPlayersReady();
+                
+                Debug.Log($"Player readiness changed. Ready: {isReady}");
             }
+        }
+        
+        // En lugar de usar RPC, simplemente llamamos a un método normal
+        private void UpdateLobbyUI()
+        {
+            // Implementación sin RPC
+            Debug.Log("Updating lobby UI");
+            
+            // Para notificar a clientes sin usar RPC, necesitaríamos otro enfoque
+            // Por ejemplo, podríamos usar SyncVars o enviar mensajes de red explícitos
         }
 
         private void CheckAllPlayersReady()
@@ -161,71 +194,81 @@ namespace EpochLegends
             return team1Count <= team2Count ? 1 : 2;
         }
 
+        public void SetGameState(GameState newState)
+        {
+            _currentState = newState;
+            
+            // Handle state-specific setup
+            switch (newState)
+            {
+                case GameState.MainMenu:
+                    // Nothing special needed for main menu
+                    break;
+                    
+                case GameState.Lobby:
+                    // Setup for lobby state
+                    break;
+                    
+                case GameState.HeroSelection:
+                    _stateTimer = heroSelectionTime;
+                    break;
+                    
+                case GameState.Playing:
+                    // Setup for gameplay
+                    break;
+                    
+                case GameState.GameOver:
+                    _stateTimer = 10f; // Show results for 10 seconds
+                    break;
+            }
+            
+            Debug.Log($"Game state changed to: {newState}");
+        }
+
         [Server]
         public void StartHeroSelection()
         {
-            _currentState = GameState.HeroSelection;
-            _stateTimer = heroSelectionTime;
+            SetGameState(GameState.HeroSelection);
             
             // Load hero selection scene on all clients
             if (EpochNetworkManager.Instance != null)
             {
                 EpochNetworkManager.Instance.ServerChangeScene(heroSelectionScene);
             }
-            else
-            {
-                Debug.LogError("NetworkManager instance not found when trying to change scene!");
-            }
+            
+            Debug.Log("Starting hero selection phase");
         }
 
         [Server]
         public void StartGame()
         {
-            // Set a countdown timer before starting the game
-            _stateTimer = countdownBeforeGameStart;
-            
-            // Notify clients about countdown
-            if (NetworkServer.active)
-            {
-                foreach (var conn in _connectedPlayers.Keys)
-                {
-                    // You could implement a ClientRPC method to show countdown on clients
-                    // For example: TargetStartCountdown(conn, countdownBeforeGameStart);
-                }
-            }
-            
-            // After countdown or immediately, load gameplay scene
-            _currentState = GameState.Playing;
+            SetGameState(GameState.Playing);
             
             // Load gameplay scene on all clients
             if (EpochNetworkManager.Instance != null)
             {
                 EpochNetworkManager.Instance.ServerChangeScene(gameplayScene);
             }
-            else
-            {
-                Debug.LogError("NetworkManager instance not found when trying to change scene!");
-            }
+            
+            Debug.Log("Starting gameplay phase");
         }
 
         [Server]
         public void EndGame(int winningTeamId)
         {
-            _currentState = GameState.GameOver;
-            _stateTimer = 10f; // Display results for 10 seconds
+            SetGameState(GameState.GameOver);
             
-            // Notify all clients about game result
-            foreach (var playerEntry in _connectedPlayers)
-            {
-                // Send game over message with results
-                // Example implementation would need corresponding client handlers
-            }
+            // Notificar el fin de juego sin usar RPC
+            Debug.Log($"Game ended. Winning team: {winningTeamId}");
+            
+            // En lugar de RPC, podrías usar SyncVars o almacenar el resultado en algún lugar
+            // para que los clientes lo consulten
         }
 
         [Server]
         private void ReturnToLobby()
         {
-            _currentState = GameState.Lobby;
+            SetGameState(GameState.Lobby);
             
             // Reset player ready status
             foreach (var conn in _connectedPlayers.Keys)
@@ -241,32 +284,27 @@ namespace EpochLegends
             {
                 EpochNetworkManager.Instance.ServerChangeScene(lobbyScene);
             }
-            else
-            {
-                Debug.LogError("NetworkManager instance not found when trying to change scene!");
-            }
+            
+            Debug.Log("Returning to lobby");
         }
         
-        // Method to handle hero selection completion
-        public void OnHeroSelectionComplete(Dictionary<uint, string> heroSelections)
+        public void OnHeroCreated(Hero hero)
         {
-            // Store hero selections and start the game
-            foreach (var selection in heroSelections)
+            Debug.Log($"GameManager: Hero created {hero.name}");
+            // Add logic for tracking created heroes
+        }
+
+        public void OnHeroSelectionComplete(Dictionary<uint, string> selectionResults)
+        {
+            Debug.Log("GameManager: Hero selection complete");
+            
+            // Process selection results
+            foreach (var selection in selectionResults)
             {
-                // Find the player connection from netId
-                foreach (var player in _connectedPlayers)
-                {
-                    if (player.Key.identity != null && player.Key.identity.netId == selection.Key)
-                    {
-                        var playerInfo = player.Value;
-                        playerInfo.SelectedHeroId = selection.Value;
-                        _connectedPlayers[player.Key] = playerInfo;
-                        break;
-                    }
-                }
+                Debug.Log($"Player {selection.Key} selected hero {selection.Value}");
             }
             
-            // Start the game
+            // Transition to gameplay
             StartGame();
         }
     }

@@ -1,179 +1,175 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
-using TMPro;
+using Mirror.Discovery;
 using EpochLegends.Core.Network.Manager;
-using EpochLegends.Core.UI.Manager;
+using EpochLegends.Core.UI.Manager; // Para acceder a UIManager y UIPanel
 
 namespace EpochLegends.Core.UI.Menu
 {
-    public class ServerBrowserController : MonoBehaviour, IUIPanelController
+    public class ServerBrowserController : MonoBehaviour
     {
-        [Header("UI References")]
-        [SerializeField] private Transform serverListContainer;
-        [SerializeField] private GameObject serverListItemPrefab;
+        [SerializeField] private Transform serverListContent;
+        [SerializeField] private GameObject serverItemPrefab;
         [SerializeField] private Button refreshButton;
         [SerializeField] private Button backButton;
-        [SerializeField] private TextMeshProUGUI statusText;
-
-        // List of server entries
-        private List<GameObject> serverEntries = new List<GameObject>();
-        private EpochNetworkManager networkManager;
-
-        private void Awake()
+        [SerializeField] private NetworkDiscovery networkDiscovery;
+        
+        private Dictionary<long, ServerResponse> discoveredServers = new Dictionary<long, ServerResponse>();
+        private float refreshCooldown = 0f;
+        
+        private void Start()
         {
-            // Get the network manager
-            networkManager = EpochNetworkManager.Instance;
-            
-            if (networkManager == null)
-            {
-                Debug.LogError("NetworkManager instance not found!");
-            }
-
-            // Set up button listeners
+            if (networkDiscovery == null)
+                networkDiscovery = FindObjectOfType<NetworkDiscovery>();
+                
             if (refreshButton != null)
                 refreshButton.onClick.AddListener(RefreshServerList);
                 
             if (backButton != null)
-                backButton.onClick.AddListener(ReturnToMainMenu);
+                backButton.onClick.AddListener(BackToMainMenu);
+                
+            // Start discovery on launch
+            StartDiscovery();
         }
-
-        public void RefreshServerList()
+        
+        private void Update()
         {
+            // Manage refresh cooldown
+            if (refreshCooldown > 0)
+            {
+                refreshCooldown -= Time.deltaTime;
+                if (refreshButton != null)
+                    refreshButton.interactable = refreshCooldown <= 0;
+            }
+        }
+        
+        public void StartDiscovery()
+        {
+            discoveredServers.Clear();
             ClearServerList();
             
-            if (statusText != null)
-                statusText.text = "Searching for servers...";
+            if (networkDiscovery != null)
+            {
+                networkDiscovery.OnServerFound.AddListener(OnDiscoveredServer);
+                networkDiscovery.StartDiscovery();
+            }
             
-            // In a real implementation, this would query LAN or internet servers
-            // For now, we'll just add some dummy servers for testing
-            
-            // Simulate network delay
-            Invoke(nameof(PopulateWithDummyServers), 1.0f);
+            // Set cooldown to prevent spam
+            refreshCooldown = 3f;
+            if (refreshButton != null)
+                refreshButton.interactable = false;
         }
-
+        
+        public void RefreshServerList()
+        {
+            if (refreshCooldown <= 0)
+            {
+                StartDiscovery();
+            }
+        }
+        
         private void ClearServerList()
         {
-            // Destroy all existing server entries
-            foreach (var entry in serverEntries)
+            if (serverListContent != null)
             {
-                Destroy(entry);
+                foreach (Transform child in serverListContent)
+                {
+                    Destroy(child.gameObject);
+                }
             }
-            
-            serverEntries.Clear();
         }
-
-        private void PopulateWithDummyServers()
+        
+        public void OnDiscoveredServer(ServerResponse info)
         {
-            // Clear status text
-            if (statusText != null)
-                statusText.text = "";
+            // Add to dictionary
+            discoveredServers[info.serverId] = info;
+            
+            // Update UI
+            DisplayServer(info);
+        }
+        
+        private void DisplayServer(ServerResponse info)
+        {
+            if (serverListContent != null && serverItemPrefab != null)
+            {
+                GameObject serverItem = Instantiate(serverItemPrefab, serverListContent);
+                ServerItemUI itemUI = serverItem.GetComponent<ServerItemUI>();
                 
-            // Add some dummy servers for testing
-            AddServerToList("Local Test Server", "127.0.0.1", "3/10", 0);
-            AddServerToList("Bob's Game", "192.168.1.105", "8/10", 30);
-            AddServerToList("Competitive Match", "203.0.113.42", "10/10", 100);
-            AddServerToList("Training Room", "198.51.100.73", "1/6", 15);
-            
-            // If no servers found
-            if (serverEntries.Count == 0 && statusText != null)
-            {
-                statusText.text = "No servers found. Try again later.";
+                if (itemUI != null)
+                {
+                    itemUI.SetupServer(info);
+                    itemUI.OnJoinClicked += () => JoinServer(info);
+                }
             }
         }
-
-        private void AddServerToList(string serverName, string ipAddress, string players, int ping)
+        
+        private void JoinServer(ServerResponse info)
         {
-            if (serverListItemPrefab == null || serverListContainer == null)
-                return;
-                
-            // Instantiate the server list item
-            GameObject serverEntry = Instantiate(serverListItemPrefab, serverListContainer);
-            serverEntries.Add(serverEntry);
+            Debug.Log($"Joining server: {info.uri}");
             
-            // Set server info
-            ServerListItem listItem = serverEntry.GetComponent<ServerListItem>();
-            if (listItem != null)
+            // Connect to the server
+            if (EpochNetworkManager.Instance != null)
             {
-                listItem.SetServerInfo(serverName, ipAddress, players, ping);
-                listItem.SetJoinAction(() => JoinServer(ipAddress, serverName));
+                EpochNetworkManager.Instance.networkAddress = info.uri.Host;
+                EpochNetworkManager.Instance.JoinGame(info.uri.Host, ""); // Assuming no password from discovery
+            }
+            else
+            {
+                Debug.LogError("EpochNetworkManager instance not found!");
             }
         }
-
-        private void JoinServer(string ipAddress, string serverName)
+        
+        private void BackToMainMenu()
         {
-            Debug.Log($"Joining server: {serverName} at {ipAddress}");
+            // Return to main menu
+            gameObject.SetActive(false);
             
-            if (networkManager != null)
+            // Find main menu and show it
+            UIManager manager = FindObjectOfType<UIManager>();
+            if (manager != null)
             {
-                networkManager.JoinGame(ipAddress, "");
-                UIManager.Instance?.ShowPanel(UIPanel.Loading);
+                // Especificar explícitamente el enum UIPanel con el namespace completo
+                manager.ShowPanel(EpochLegends.Core.UI.Manager.UIPanel.MainMenu);
             }
         }
-
-        private void ReturnToMainMenu()
-        {
-            UIManager.Instance?.ShowPanel(UIPanel.MainMenu);
-        }
-
-        #region IUIPanelController Implementation
         
-        public void OnPanelShown()
+        private void OnDestroy()
         {
-            // Refresh the server list when panel is shown
-            RefreshServerList();
+            if (networkDiscovery != null)
+            {
+                networkDiscovery.OnServerFound.RemoveListener(OnDiscoveredServer);
+                networkDiscovery.StopDiscovery();
+            }
         }
-        
-        public void OnPanelHidden()
-        {
-            // Cancel any ongoing server discovery
-            CancelInvoke(nameof(PopulateWithDummyServers));
-        }
-        
-        #endregion
     }
-
-    // Class for individual server list items
-    public class ServerListItem : MonoBehaviour
+    
+    // Helper class for server list items
+    public class ServerItemUI : MonoBehaviour
     {
-        [SerializeField] private TextMeshProUGUI serverNameText;
-        [SerializeField] private TextMeshProUGUI ipAddressText;
-        [SerializeField] private TextMeshProUGUI playersText;
-        [SerializeField] private TextMeshProUGUI pingText;
+        [SerializeField] private Text serverNameText;
+        [SerializeField] private Text playerCountText;
+        [SerializeField] private Text pingText;
         [SerializeField] private Button joinButton;
-
-        private string ipAddress;
-
-        private void Awake()
-        {
-            if (joinButton == null)
-                joinButton = GetComponentInChildren<Button>();
-        }
-
-        public void SetServerInfo(string serverName, string ip, string players, int ping)
-        {
-            ipAddress = ip;
-            
-            if (serverNameText != null)
-                serverNameText.text = serverName;
-                
-            if (ipAddressText != null)
-                ipAddressText.text = ip;
-                
-            if (playersText != null)
-                playersText.text = players;
-                
-            if (pingText != null)
-                pingText.text = ping + " ms";
-        }
-
-        public void SetJoinAction(UnityEngine.Events.UnityAction action)
+        
+        public System.Action OnJoinClicked;
+        
+        private void Start()
         {
             if (joinButton != null)
-            {
-                joinButton.onClick.RemoveAllListeners();
-                joinButton.onClick.AddListener(action);
-            }
+                joinButton.onClick.AddListener(() => OnJoinClicked?.Invoke());
+        }
+        
+        public void SetupServer(ServerResponse info)
+        {
+            if (serverNameText != null)
+                serverNameText.text = info.uri.ToString(); // Usa la URI como nombre
+                
+            if (playerCountText != null)
+                playerCountText.text = "Players: ?/?"; // No hay datos de jugadores en ServerResponse
+                
+            if (pingText != null)
+                pingText.text = "Ping: ?ms"; // No hay datos de ping en ServerResponse
         }
     }
 }

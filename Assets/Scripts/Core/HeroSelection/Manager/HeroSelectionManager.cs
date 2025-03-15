@@ -3,7 +3,7 @@ using Mirror;
 using System.Collections.Generic;
 using System.Linq;
 using EpochLegends.Core.Hero;
-using EpochLegends.Core.Network.Manager;
+using EpochLegends.Core.Network;
 using EpochLegends.Core.HeroSelection.Registry;
 using EpochLegends.Core.UI.Manager;
 using EpochLegends.Systems.Team.Manager;

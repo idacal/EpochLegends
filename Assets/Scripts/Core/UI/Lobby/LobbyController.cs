@@ -3,12 +3,14 @@ using UnityEngine.UI;
 using TMPro;
 using Mirror;
 using System.Collections.Generic;
+using System.Linq;
 using EpochLegends.Systems.Team.Manager;
 using EpochLegends.Systems.Team.Assignment;
 
 namespace EpochLegends.UI.Lobby
 {
-    public class LobbyController : MonoBehaviour // Cambiado de NetworkBehaviour a MonoBehaviour
+    // Usamos MonoBehaviour porque la UI no necesita ser un NetworkBehaviour
+    public class LobbyController : MonoBehaviour
     {
         [Header("Server Info")]
         [SerializeField] private TextMeshProUGUI serverNameText;
@@ -16,7 +18,7 @@ namespace EpochLegends.UI.Lobby
         [SerializeField] private GameObject waitingForPlayersText;
 
         [Header("Team Panels")]
-        [SerializeField] private Transform[] teamContainers;
+        [SerializeField] private Transform[] teamContainers; // Asigna contenedores para cada equipo (por ejemplo, 2)
         [SerializeField] private TextMeshProUGUI[] teamNameTexts;
         [SerializeField] private GameObject playerEntryPrefab;
 
@@ -27,110 +29,109 @@ namespace EpochLegends.UI.Lobby
         [SerializeField] private Button teamSwitchButton;
         [SerializeField] private Button disconnectButton;
 
-        // References
+        // Referencias a otros managers
         private NetworkManager networkManager;
         private TeamManager teamManager;
         private TeamAssignment teamAssignment;
-        private GameManager gameManager;
+        private EpochLegends.GameManager gameManager;
 
-        // State tracking
+        // Estado local
         private bool isPlayerReady = false;
         private bool isLocalPlayerHost = false;
 
-        // Player entries cache
-        private Dictionary<uint, PlayerEntry> playerEntries = new Dictionary<uint, PlayerEntry>();
+        // Cache de entradas de jugador en la UI
+        private Dictionary<uint, PlayerInfo> currentPlayerInfos = new Dictionary<uint, PlayerInfo>();
+        private Dictionary<uint, GameObject> playerEntries = new Dictionary<uint, GameObject>();
+
+        // Definición común de PlayerInfo para la UI
+        public struct PlayerInfo
+        {
+            public uint NetId;
+            public string PlayerName;
+            public int TeamId;
+            public bool IsReady;
+            public bool IsHost;
+        }
 
         private void Awake()
         {
-            // Find managers
             networkManager = NetworkManager.singleton;
             teamManager = FindObjectOfType<TeamManager>();
             teamAssignment = FindObjectOfType<TeamAssignment>();
-            gameManager = FindObjectOfType<GameManager>();
+            gameManager = FindObjectOfType<EpochLegends.GameManager>();
 
             if (networkManager == null || teamManager == null || gameManager == null)
             {
-                Debug.LogError("Required managers not found in scene!");
+                Debug.LogError("No se encontraron los managers requeridos en la escena.");
             }
 
-            // Setup button listeners
+            // Configurar listeners de botones
             if (readyButton != null)
                 readyButton.onClick.AddListener(OnReadyButtonClicked);
-
             if (startGameButton != null)
                 startGameButton.onClick.AddListener(OnStartGameClicked);
-
             if (teamSwitchButton != null)
                 teamSwitchButton.onClick.AddListener(OnTeamSwitchClicked);
-
             if (disconnectButton != null)
                 disconnectButton.onClick.AddListener(OnDisconnectClicked);
         }
 
         private void Start()
         {
-            // Determine if we're the host
+            // Determinar si somos host
             isLocalPlayerHost = NetworkServer.active;
-            
-            // Setup UI based on role
+
+            // Actualizar UI según el rol
             if (isLocalPlayerHost)
             {
-                // Show start game button for host
                 if (startGameButton != null)
                     startGameButton.gameObject.SetActive(true);
             }
             else
             {
-                // Hide start game button for clients
                 if (startGameButton != null)
                     startGameButton.gameObject.SetActive(false);
             }
 
-            // Setup server info
+            // Configurar información del servidor
             if (serverNameText != null)
             {
                 serverNameText.text = $"Server: {GetServerName()}";
             }
 
-            // Initialize team names
+            // Inicializar nombres de equipos
             UpdateTeamNames();
 
-            // Initial UI state
+            // Estado inicial de botones
             UpdateReadyButtonText();
             UpdateStartButtonState();
             UpdateWaitingForPlayersText();
         }
 
-        private string GetServerName()
-        {
-            // Simplify for now - you can customize based on your implementation
-            return "Epoch Legends Server";
-        }
-
         private void Update()
         {
-            // Update player count
             UpdatePlayerCount();
-            
-            // Update UI states
             UpdateStartButtonState();
             UpdateWaitingForPlayersText();
+            RefreshPlayerList();
         }
 
         #region UI Updates
 
+        private string GetServerName()
+        {
+            return "Epoch Legends Server";
+        }
+
         private void UpdateTeamNames()
         {
             if (teamManager == null) return;
-
-            // Set team names in UI
             for (int i = 0; i < teamContainers.Length && i < teamNameTexts.Length; i++)
             {
-                TeamConfig config = teamManager.GetTeamConfig(i + 1); // Assuming team IDs start at 1
+                var config = teamManager.GetTeamConfig(i + 1); // Suponiendo que los IDs de equipo inician en 1
                 if (config != null)
                 {
                     teamNameTexts[i].text = config.teamName;
-                    // Could also set team colors here
                     teamNameTexts[i].color = config.teamColor;
                 }
             }
@@ -140,8 +141,8 @@ namespace EpochLegends.UI.Lobby
         {
             if (playerCountText != null && gameManager != null)
             {
-                int playerCount = gameManager.ConnectedPlayerCount;
-                playerCountText.text = $"Players: {playerCount}";
+                int count = gameManager.ConnectedPlayerCount;
+                playerCountText.text = $"Players: {count}";
             }
         }
 
@@ -166,160 +167,121 @@ namespace EpochLegends.UI.Lobby
         {
             if (waitingForPlayersText != null && gameManager != null)
             {
-                bool needMorePlayers = gameManager.ConnectedPlayerCount < 2;
-                waitingForPlayersText.SetActive(needMorePlayers);
+                bool needMore = gameManager.ConnectedPlayerCount < 2;
+                waitingForPlayersText.SetActive(needMore);
             }
         }
 
         #endregion
 
-        #region Player Management
+        #region Actualización de la Lista de Jugadores
 
-        public void UpdatePlayerList(PlayerInfo[] players)
+        // Este método consulta a GameManager la lista de conexiones y reconstruye la lista de UI.
+        private void RefreshPlayerList()
         {
-            // Clear current entries if needed
-            if (playerEntries.Count > 0)
+            if (gameManager == null) return;
+
+            // Construimos una lista de PlayerInfo "local" a partir de los jugadores conectados en GameManager
+            Dictionary<uint, PlayerInfo> updatedInfos = new Dictionary<uint, PlayerInfo>();
+
+            foreach (var kvp in gameManager.ConnectedPlayers)
             {
-                HashSet<uint> currentPlayers = new HashSet<uint>();
-                
-                // Update existing entries and add new ones
-                foreach (var playerInfo in players)
+                uint netId = 0;
+                string playerName = "Unknown";
+                if (kvp.Key.identity != null)
                 {
-                    uint netId = playerInfo.NetId;
-                    currentPlayers.Add(netId);
-                    
-                    if (playerEntries.TryGetValue(netId, out PlayerEntry entry))
-                    {
-                        // Update existing entry
-                        entry.UpdateInfo(playerInfo);
-                    }
-                    else
-                    {
-                        // Create new entry
-                        CreatePlayerEntry(playerInfo);
-                    }
+                    netId = kvp.Key.identity.netId;
+                    playerName = kvp.Key.identity.gameObject.name;
                 }
-                
-                // Remove entries for players who left
-                List<uint> toRemove = new List<uint>();
-                foreach (var entry in playerEntries)
+                bool isHost = kvp.Key == NetworkServer.localConnection;
+                int teamId = kvp.Value.TeamId;
+                bool ready = kvp.Value.IsReady;
+
+                updatedInfos[netId] = new PlayerInfo
                 {
-                    if (!currentPlayers.Contains(entry.Key))
-                    {
-                        toRemove.Add(entry.Key);
-                    }
-                }
-                
-                foreach (var netId in toRemove)
-                {
-                    RemovePlayerEntry(netId);
-                }
+                    NetId = netId,
+                    PlayerName = playerName,
+                    TeamId = teamId,
+                    IsReady = ready,
+                    IsHost = isHost
+                };
             }
-            else
+
+            // Actualizamos la UI: agregamos nuevas entradas y removemos las que ya no están
+            // Agregar o actualizar entradas
+            foreach (var info in updatedInfos.Values)
             {
-                // Initial population
-                foreach (var playerInfo in players)
+                if (playerEntries.ContainsKey(info.NetId))
                 {
-                    CreatePlayerEntry(playerInfo);
+                    // Aquí podrías actualizar la entrada si fuera necesario
+                    // Por ejemplo, cambiar el indicador de ready, etc.
+                }
+                else
+                {
+                    CreatePlayerEntry(info);
                 }
             }
 
-            // Actualizar UI
-            UpdateStartButtonState();
-            UpdateWaitingForPlayersText();
-        }
-
-        private void CreatePlayerEntry(PlayerInfo playerInfo)
-        {
-            if (teamContainers == null || teamContainers.Length < 2) return;
-
-            // Determine which team container to use (0-based array index)
-            int teamIndex = playerInfo.TeamId - 1;
-            
-            // Validate team index
-            if (teamIndex < 0 || teamIndex >= teamContainers.Length)
+            // Remover entradas que ya no están
+            List<uint> toRemove = playerEntries.Keys.Except(updatedInfos.Keys).ToList();
+            foreach (var netId in toRemove)
             {
-                teamIndex = 0;
-            }
-
-            // Create the entry
-            GameObject entryObj = Instantiate(playerEntryPrefab, teamContainers[teamIndex]);
-            PlayerEntry entry = entryObj.GetComponent<PlayerEntry>();
-            
-            if (entry != null)
-            {
-                entry.Initialize(playerInfo);
-                playerEntries[playerInfo.NetId] = entry;
-            }
-        }
-
-        private void RemovePlayerEntry(uint netId)
-        {
-            if (playerEntries.TryGetValue(netId, out PlayerEntry entry))
-            {
-                if (entry != null)
+                if (playerEntries.TryGetValue(netId, out GameObject entry))
                 {
-                    Destroy(entry.gameObject);
+                    Destroy(entry);
                 }
                 playerEntries.Remove(netId);
             }
         }
 
-        // Actualiza el estado de un jugador específico
-        public void UpdatePlayerReadyState(uint playerNetId, bool isReady)
+        private void CreatePlayerEntry(PlayerInfo info)
         {
-            // Actualizar la entrada del jugador si existe
-            if (playerEntries.TryGetValue(playerNetId, out PlayerEntry entry))
+            // Asigna el contenedor según el equipo (suponiendo que teamContainers[0] es equipo 1 y [1] equipo 2)
+            int teamIndex = info.TeamId - 1;
+            if (teamIndex < 0 || teamIndex >= teamContainers.Length)
+                teamIndex = 0;
+
+            if (playerEntryPrefab != null && teamContainers[teamIndex] != null)
             {
-                PlayerInfo updatedInfo = new PlayerInfo
+                GameObject entry = Instantiate(playerEntryPrefab, teamContainers[teamIndex]);
+                // Suponiendo que el prefab tiene un componente que muestra el nombre y estado
+                Text entryText = entry.GetComponentInChildren<Text>();
+                if (entryText != null)
                 {
-                    NetId = playerNetId,
-                    IsReady = isReady,
-                    // Mantener valores existentes
-                    PlayerName = entry.GetPlayerName(),
-                    TeamId = entry.GetTeamId(),
-                    IsHost = entry.IsHost()
-                };
-                
-                entry.UpdateInfo(updatedInfo);
+                    entryText.text = info.PlayerName + (info.IsHost ? " (Host)" : "");
+                }
+                // Si el prefab tiene un indicador de "ready", puedes actualizarlo aquí.
+                playerEntries[info.NetId] = entry;
             }
-            
-            // Si este es el jugador local, actualiza el estado local
-            if (IsLocalPlayer(playerNetId))
+        }
+
+        private bool CheckAllPlayersReady()
+        {
+            if (gameManager == null) return false;
+            foreach (var kvp in gameManager.ConnectedPlayers)
             {
-                isPlayerReady = isReady;
-                UpdateReadyButtonText();
+                if (!kvp.Value.IsReady)
+                    return false;
             }
-            
-            // Actualiza UI
-            UpdateStartButtonState();
+            return true;
         }
 
         #endregion
 
-        #region Button Handlers
+        #region Handlers de Botones
 
         private void OnReadyButtonClicked()
         {
-            // Toggle ready state
             isPlayerReady = !isPlayerReady;
-            
-            // Update button text
             UpdateReadyButtonText();
-            
-            // Get local player NetId
-            uint localPlayerNetId = GetLocalPlayerNetId();
-            
-            // Send ready status to server if we have a valid NetworkConnection
+
+            // Enviar el estado "ready" al servidor
             if (NetworkClient.active && NetworkClient.connection != null)
             {
                 NetworkClient.connection.Send(new ReadyStateMessage
                 {
                     isReady = isPlayerReady
                 });
-                
-                // Update locally immediately for responsiveness
-                UpdatePlayerReadyState(localPlayerNetId, isPlayerReady);
             }
         }
 
@@ -327,65 +289,35 @@ namespace EpochLegends.UI.Lobby
         {
             if (!isLocalPlayerHost) return;
 
-            // Check if at least 2 players are connected
             if (gameManager != null && gameManager.ConnectedPlayerCount >= 2)
             {
-                // Check if all players are ready
-                bool allReady = CheckAllPlayersReady();
-                
-                if (allReady)
+                if (CheckAllPlayersReady())
                 {
-                    // Start hero selection
                     gameManager.StartHeroSelection();
                 }
                 else
                 {
-                    // Show message that not all players are ready
-                    Debug.Log("Cannot start game: Not all players are ready");
+                    Debug.Log("No se puede iniciar el juego: no todos los jugadores están listos.");
                 }
             }
             else
             {
-                // Show message that more players are needed
-                Debug.Log("Cannot start game: Need at least 2 players");
+                Debug.Log("No se puede iniciar el juego: se necesitan al menos 2 jugadores.");
             }
-        }
-        
-        private bool CheckAllPlayersReady()
-        {
-            if (gameManager == null) return false;
-
-            foreach (var playerInfo in gameManager.ConnectedPlayers.Values)
-            {
-                if (!playerInfo.IsReady)
-                    return false;
-            }
-            
-            return true;
         }
 
         private void OnTeamSwitchClicked()
         {
-            if (!NetworkClient.active) return;
-
-            // Request team switch to opposite team
-            int currentTeam = GetLocalPlayerTeam();
-            int newTeam = (currentTeam == 1) ? 2 : 1;
-            
+            // Aquí se podría solicitar un cambio de equipo mediante TeamAssignment
             if (teamAssignment != null)
             {
+                int currentTeam = GetLocalPlayerTeam();
+                int newTeam = (currentTeam == 1) ? 2 : 1;
                 teamAssignment.RequestTeamChange(newTeam);
             }
             else
             {
-                // Fallback - send team change request directly if possible
-                if (NetworkClient.connection != null)
-                {
-                    NetworkClient.connection.Send(new TeamChangeMessage
-                    {
-                        teamId = newTeam
-                    });
-                }
+                Debug.Log("No se encontró el TeamAssignment.");
             }
         }
 
@@ -393,12 +325,10 @@ namespace EpochLegends.UI.Lobby
         {
             if (NetworkClient.active)
             {
-                // Si somos host
                 if (NetworkServer.active)
                 {
                     NetworkManager.singleton.StopHost();
                 }
-                // Si somos cliente
                 else
                 {
                     NetworkManager.singleton.StopClient();
@@ -406,126 +336,30 @@ namespace EpochLegends.UI.Lobby
             }
         }
 
-        #endregion
-
-        #region Helper Methods
-
         private int GetLocalPlayerTeam()
         {
             if (gameManager == null) return 1;
-
-            // Get local player's team
-            if (NetworkClient.active && NetworkClient.localPlayer != null)
+            foreach (var kvp in gameManager.ConnectedPlayers)
             {
-                uint localPlayerNetId = NetworkClient.localPlayer.netId;
-                
-                foreach (var playerEntry in gameManager.ConnectedPlayers)
+                if (kvp.Key.identity != null &&
+                    kvp.Key.identity.netId == NetworkClient.localPlayer.netId)
                 {
-                    if (playerEntry.Key.identity != null && 
-                        playerEntry.Key.identity.netId == localPlayerNetId)
-                    {
-                        return playerEntry.Value.TeamId;
-                    }
+                    return kvp.Value.TeamId;
                 }
             }
-
-            return 1; // Default to team 1
-        }
-        
-        private uint GetLocalPlayerNetId()
-        {
-            if (NetworkClient.active && NetworkClient.localPlayer != null)
-            {
-                return NetworkClient.localPlayer.netId;
-            }
-            return 0;
-        }
-        
-        private bool IsLocalPlayer(uint netId)
-        {
-            return NetworkClient.active && 
-                   NetworkClient.localPlayer != null && 
-                   NetworkClient.localPlayer.netId == netId;
+            return 1;
         }
 
         #endregion
     }
 
-    // Mensaje para comunicar el estado "ready"
+    // Mensajes para la comunicación de estado "ready" y cambio de equipo
     public struct ReadyStateMessage : NetworkMessage
     {
         public bool isReady;
     }
-    
-    // Mensaje para solicitar cambio de equipo
     public struct TeamChangeMessage : NetworkMessage
     {
         public int teamId;
-    }
-
-    // Helper struct to be used with player list updates
-    public struct PlayerInfo
-    {
-        public uint NetId;
-        public string PlayerName;
-        public int TeamId;
-        public bool IsReady;
-        public bool IsHost;
-    }
-
-    // Component for individual player entries in the lobby
-    public class PlayerEntry : MonoBehaviour
-    {
-        [SerializeField] private TextMeshProUGUI playerNameText;
-        [SerializeField] private Image readyIndicator;
-        [SerializeField] private Sprite readySprite;
-        [SerializeField] private Sprite notReadySprite;
-        [SerializeField] private GameObject hostIndicator;
-
-        private uint playerNetId;
-        private string playerName;
-        private int teamId;
-        private bool isHost;
-
-        public void Initialize(PlayerInfo info)
-        {
-            playerNetId = info.NetId;
-            playerName = info.PlayerName;
-            teamId = info.TeamId;
-            isHost = info.IsHost;
-            UpdateInfo(info);
-        }
-
-        public void UpdateInfo(PlayerInfo info)
-        {
-            // Actualizar datos internos
-            playerName = info.PlayerName;
-            teamId = info.TeamId;
-            isHost = info.IsHost;
-
-            // Update player name
-            if (playerNameText != null)
-            {
-                playerNameText.text = info.PlayerName;
-            }
-
-            // Update ready status
-            if (readyIndicator != null)
-            {
-                readyIndicator.sprite = info.IsReady ? readySprite : notReadySprite;
-                readyIndicator.gameObject.SetActive(true);
-            }
-
-            // Update host indicator
-            if (hostIndicator != null)
-            {
-                hostIndicator.SetActive(info.IsHost);
-            }
-        }
-
-        // Getters para acceder a los datos internos
-        public string GetPlayerName() => playerName;
-        public int GetTeamId() => teamId;
-        public bool IsHost() => isHost;
     }
 }

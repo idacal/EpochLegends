@@ -176,7 +176,7 @@ namespace EpochLegends.Core.UI.Menu
             UIManager.Instance?.ShowPanel(UIPanel.Options);
         }
         
-        private void QuitGame()
+        public void QuitGame()
         {
             #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;

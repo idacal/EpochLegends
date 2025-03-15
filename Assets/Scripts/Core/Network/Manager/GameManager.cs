@@ -1,7 +1,8 @@
 using UnityEngine;
 using Mirror;
 using System.Collections.Generic;
-using EpochLegends.Core.Network;
+using EpochLegends.Core.Network.Manager;
+using EpochLegends.Core.Player;
 
 namespace EpochLegends
 {
@@ -19,7 +20,7 @@ namespace EpochLegends
 
         [Header("Game Configuration")]
         [SerializeField] private float heroSelectionTime = 60f;
-        [SerializeField] private float gameStartCountdown = 5f;
+        [SerializeField] private float countdownBeforeGameStart = 5f;
         
         [Header("Scene References")]
         [SerializeField] private string lobbyScene = "Lobby";
@@ -102,6 +103,12 @@ namespace EpochLegends
                 Debug.Log($"Player left. Total players: {_connectedPlayers.Count}");
             }
         }
+        
+        public void OnHeroCreated(Core.Hero.Hero hero)
+        {
+            // Handle hero creation
+            Debug.Log($"Hero created: {hero.name}");
+        }
 
         public void SetPlayerReady(NetworkConnection conn, bool isReady)
         {
@@ -161,23 +168,43 @@ namespace EpochLegends
             _stateTimer = heroSelectionTime;
             
             // Load hero selection scene on all clients
-            EpochNetworkManager networkManager = EpochNetworkManager.Instance;
-            if (networkManager != null)
+            if (EpochNetworkManager.Instance != null)
             {
-                networkManager.ServerChangeScene(heroSelectionScene);
+                EpochNetworkManager.Instance.ServerChangeScene(heroSelectionScene);
+            }
+            else
+            {
+                Debug.LogError("NetworkManager instance not found when trying to change scene!");
             }
         }
 
         [Server]
         public void StartGame()
         {
+            // Set a countdown timer before starting the game
+            _stateTimer = countdownBeforeGameStart;
+            
+            // Notify clients about countdown
+            if (NetworkServer.active)
+            {
+                foreach (var conn in _connectedPlayers.Keys)
+                {
+                    // You could implement a ClientRPC method to show countdown on clients
+                    // For example: TargetStartCountdown(conn, countdownBeforeGameStart);
+                }
+            }
+            
+            // After countdown or immediately, load gameplay scene
             _currentState = GameState.Playing;
             
             // Load gameplay scene on all clients
-            EpochNetworkManager networkManager = EpochNetworkManager.Instance;
-            if (networkManager != null)
+            if (EpochNetworkManager.Instance != null)
             {
-                networkManager.ServerChangeScene(gameplayScene);
+                EpochNetworkManager.Instance.ServerChangeScene(gameplayScene);
+            }
+            else
+            {
+                Debug.LogError("NetworkManager instance not found when trying to change scene!");
             }
         }
 
@@ -210,19 +237,34 @@ namespace EpochLegends
             }
             
             // Load lobby scene on all clients
-            EpochNetworkManager networkManager = EpochNetworkManager.Instance;
-            if (networkManager != null)
+            if (EpochNetworkManager.Instance != null)
             {
-                networkManager.ServerChangeScene(lobbyScene);
+                EpochNetworkManager.Instance.ServerChangeScene(lobbyScene);
+            }
+            else
+            {
+                Debug.LogError("NetworkManager instance not found when trying to change scene!");
             }
         }
         
-        public void OnHeroSelectionComplete(Dictionary<uint, string> selectionResults)
+        // Method to handle hero selection completion
+        public void OnHeroSelectionComplete(Dictionary<uint, string> heroSelections)
         {
-            // Process hero selection results
-            // This would typically:
-            // 1. Store selected heroes for each player
-            // 2. Prepare for gameplay scene
+            // Store hero selections and start the game
+            foreach (var selection in heroSelections)
+            {
+                // Find the player connection from netId
+                foreach (var player in _connectedPlayers)
+                {
+                    if (player.Key.identity != null && player.Key.identity.netId == selection.Key)
+                    {
+                        var playerInfo = player.Value;
+                        playerInfo.SelectedHeroId = selection.Value;
+                        _connectedPlayers[player.Key] = playerInfo;
+                        break;
+                    }
+                }
+            }
             
             // Start the game
             StartGame();

@@ -3,7 +3,7 @@ using Mirror;
 using System.Collections.Generic;
 using System.Linq;
 using EpochLegends.Core.Hero;
-using EpochLegends.Core.Network;
+using EpochLegends.Core.Network.Manager;
 using EpochLegends.Core.HeroSelection.Registry;
 using EpochLegends.Core.UI.Manager;
 using EpochLegends.Systems.Team.Manager;
@@ -22,12 +22,19 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [SerializeField] private TeamManager teamManager;
         
         // Synced state
-        [SyncVar(hook = nameof(UpdateTimerDisplay))]
+        [SyncVar(hook = nameof(OnTimerChanged))]
         private float remainingTime = 60f;
         
-        // Selection tracking
-        private readonly SyncDictionary<uint, string> selectedHeroes = new SyncDictionary<uint, string>();
-        private readonly SyncDictionary<uint, bool> readyPlayers = new SyncDictionary<uint, bool>();
+        // Selection tracking using standard dictionaries for server-side logic
+        private readonly Dictionary<uint, string> selectedHeroes = new Dictionary<uint, string>();
+        private readonly Dictionary<uint, bool> readyPlayers = new Dictionary<uint, bool>();
+        
+        // SyncVars for client display
+        [SyncVar]
+        private string syncSelectedHeroesJson = "{}";
+        
+        [SyncVar]
+        private string syncReadyPlayersJson = "{}";
         
         // Private state
         private bool selectionInProgress = false;
@@ -63,9 +70,14 @@ namespace EpochLegends.Core.HeroSelection.Manager
         {
             base.OnStartClient();
             
-            // Register for sync events
-            selectedHeroes.Callback += OnSelectedHeroesUpdated;
-            readyPlayers.Callback += OnReadyPlayersUpdated;
+            // Initial deserialization of dictionaries
+            DeserializeSelectedHeroes();
+            DeserializeReadyPlayers();
+        }
+        
+        public override void OnStopClient()
+        {
+            base.OnStopClient();
         }
         
         private void Update()
@@ -100,6 +112,8 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Reset state
             selectedHeroes.Clear();
             readyPlayers.Clear();
+            syncSelectedHeroesJson = "{}";
+            syncReadyPlayersJson = "{}";
             remainingTime = selectionTime;
             allPlayersReady = false;
             selectionInProgress = true;
@@ -146,7 +160,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
             OnSelectionComplete?.Invoke();
             
             // Notify game manager to transition to next phase
-            GameManager gameManager = FindObjectOfType<GameManager>();
+            EpochLegends.GameManager gameManager = FindObjectOfType<EpochLegends.GameManager>();
             if (gameManager != null)
             {
                 gameManager.OnHeroSelectionComplete(GetSelectionResults());
@@ -197,11 +211,15 @@ namespace EpochLegends.Core.HeroSelection.Manager
                 }
             }
             
-            // Update selection
+            // Update selection in dictionary
             selectedHeroes[playerNetId] = heroId;
             
-            // Trigger event
+            // Update synced JSON
+            SerializeSelectedHeroes();
+            
+            // Trigger event locally and send to clients
             OnHeroSelected?.Invoke(playerNetId, heroId);
+            RpcHeroSelected(playerNetId, heroId);
             
             Debug.Log($"Player {playerNetId} selected hero {heroId}");
         }
@@ -209,7 +227,14 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Server]
         private void SetPlayerReady(uint playerNetId, bool isReady)
         {
+            // Update ready status
             readyPlayers[playerNetId] = isReady;
+            
+            // Update synced JSON
+            SerializeReadyPlayers();
+            
+            // Notify clients
+            RpcPlayerReadyChanged(playerNetId, isReady);
             
             Debug.Log($"Player {playerNetId} ready status set to {isReady}");
         }
@@ -310,15 +335,134 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Server]
         private Dictionary<uint, string> GetSelectionResults()
         {
-            // Convert SyncDictionary to regular Dictionary for return
-            Dictionary<uint, string> results = new Dictionary<uint, string>();
+            // Return a copy of the selected heroes dictionary
+            return new Dictionary<uint, string>(selectedHeroes);
+        }
+        
+        #endregion
+        
+        #region Dictionary Serialization
+        
+        // Serialize the selected heroes dictionary to JSON
+        [Server]
+        private void SerializeSelectedHeroes()
+        {
+            // Simple JSON format: {"key1":"value1","key2":"value2"}
+            string json = "{";
+            bool first = true;
             
-            foreach (var entry in selectedHeroes)
+            foreach (var kvp in selectedHeroes)
             {
-                results[entry.Key] = entry.Value;
+                if (!first)
+                    json += ",";
+                    
+                json += $"\"{kvp.Key}\":\"{kvp.Value}\"";
+                first = false;
             }
             
-            return results;
+            json += "}";
+            syncSelectedHeroesJson = json;
+        }
+        
+        // Serialize the ready players dictionary to JSON
+        [Server]
+        private void SerializeReadyPlayers()
+        {
+            // Simple JSON format: {"key1":true,"key2":false}
+            string json = "{";
+            bool first = true;
+            
+            foreach (var kvp in readyPlayers)
+            {
+                if (!first)
+                    json += ",";
+                    
+                json += $"\"{kvp.Key}\":{kvp.Value.ToString().ToLower()}";
+                first = false;
+            }
+            
+            json += "}";
+            syncReadyPlayersJson = json;
+        }
+        
+        // Deserialize the selected heroes JSON to a dictionary
+        [Client]
+        private Dictionary<uint, string> DeserializeSelectedHeroes()
+        {
+            Dictionary<uint, string> result = new Dictionary<uint, string>();
+            
+            // Skip if JSON is empty or invalid
+            if (string.IsNullOrEmpty(syncSelectedHeroesJson) || syncSelectedHeroesJson == "{}")
+                return result;
+                
+            try
+            {
+                // Parse the JSON manually for simple format
+                string content = syncSelectedHeroesJson.Trim('{', '}');
+                string[] pairs = content.Split(',');
+                
+                foreach (string pair in pairs)
+                {
+                    if (string.IsNullOrEmpty(pair)) continue;
+                    
+                    string[] keyValue = pair.Split(':');
+                    if (keyValue.Length != 2) continue;
+                    
+                    string key = keyValue[0].Trim('"');
+                    string value = keyValue[1].Trim('"');
+                    
+                    if (uint.TryParse(key, out uint netId))
+                    {
+                        result[netId] = value;
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error deserializing selected heroes: {e.Message}");
+            }
+            
+            return result;
+        }
+        
+        // Deserialize the ready players JSON to a dictionary
+        [Client]
+        private Dictionary<uint, bool> DeserializeReadyPlayers()
+        {
+            Dictionary<uint, bool> result = new Dictionary<uint, bool>();
+            
+            // Skip if JSON is empty or invalid
+            if (string.IsNullOrEmpty(syncReadyPlayersJson) || syncReadyPlayersJson == "{}")
+                return result;
+                
+            try
+            {
+                // Parse the JSON manually for simple format
+                string content = syncReadyPlayersJson.Trim('{', '}');
+                string[] pairs = content.Split(',');
+                
+                foreach (string pair in pairs)
+                {
+                    if (string.IsNullOrEmpty(pair)) continue;
+                    
+                    string[] keyValue = pair.Split(':');
+                    if (keyValue.Length != 2) continue;
+                    
+                    string key = keyValue[0].Trim('"');
+                    string value = keyValue[1].Trim();
+                    
+                    if (uint.TryParse(key, out uint netId) && bool.TryParse(value, out bool isReady))
+                    {
+                        result[netId] = isReady;
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error deserializing ready players: {e.Message}");
+            }
+            
+            return result;
         }
         
         #endregion
@@ -422,6 +566,20 @@ namespace EpochLegends.Core.HeroSelection.Manager
             Debug.Log("Hero selection completed");
         }
         
+        [ClientRpc]
+        private void RpcHeroSelected(uint playerNetId, string heroId)
+        {
+            // Trigger hero selected event for UI updates
+            OnHeroSelected?.Invoke(playerNetId, heroId);
+        }
+        
+        [ClientRpc]
+        private void RpcPlayerReadyChanged(uint playerNetId, bool isReady)
+        {
+            // UI would update ready status indicators
+            Debug.Log($"Player {playerNetId} ready status changed to {isReady}");
+        }
+        
         [TargetRpc]
         private void TargetInvalidSelection(NetworkConnection target, string heroId)
         {
@@ -440,29 +598,12 @@ namespace EpochLegends.Core.HeroSelection.Manager
         
         #endregion
         
-        #region Sync Var Hooks
+        #region Sync Hooks
         
-        // This method is used as a hook for remainingTime SyncVar
-        private void UpdateTimerDisplay(float oldValue, float newValue)
+        private void OnTimerChanged(float oldValue, float newValue)
         {
             // Update UI with new timer value
             Debug.Log($"Selection timer: {newValue:F1} seconds");
-        }
-        
-        private void OnSelectedHeroesUpdated(SyncDictionary<uint, string>.Operation op, uint key, string item)
-        {
-            // Update UI when selections change
-            Debug.Log($"Selection updated: Player {key}, Hero {item}");
-            
-            // UI would update hero selection display
-        }
-        
-        private void OnReadyPlayersUpdated(SyncDictionary<uint, bool>.Operation op, uint key, bool item)
-        {
-            // Update UI when ready status changes
-            Debug.Log($"Ready status updated: Player {key}, Ready {item}");
-            
-            // UI would update ready status indicators
         }
         
         #endregion
@@ -506,9 +647,13 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public bool IsHeroSelectedByAnyPlayer(string heroId)
         {
-            foreach (var entry in selectedHeroes)
+            // Get the current selected heroes from the synced JSON
+            Dictionary<uint, string> currentSelections = DeserializeSelectedHeroes();
+            
+            // Check if any player has selected this hero
+            foreach (var selection in currentSelections)
             {
-                if (entry.Value == heroId)
+                if (selection.Value == heroId)
                 {
                     return true;
                 }
@@ -520,7 +665,11 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public string GetSelectedHero(uint playerNetId)
         {
-            if (selectedHeroes.TryGetValue(playerNetId, out string heroId))
+            // Get the current selected heroes from the synced JSON
+            Dictionary<uint, string> currentSelections = DeserializeSelectedHeroes();
+            
+            // Check if the player has selected a hero
+            if (currentSelections.TryGetValue(playerNetId, out string heroId))
             {
                 return heroId;
             }
@@ -531,7 +680,11 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public bool IsPlayerReady(uint playerNetId)
         {
-            if (readyPlayers.TryGetValue(playerNetId, out bool isReady))
+            // Get the current ready players from the synced JSON
+            Dictionary<uint, bool> currentReadyPlayers = DeserializeReadyPlayers();
+            
+            // Check if the player is ready
+            if (currentReadyPlayers.TryGetValue(playerNetId, out bool isReady))
             {
                 return isReady;
             }

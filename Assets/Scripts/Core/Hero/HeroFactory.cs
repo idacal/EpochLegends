@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EpochLegends.Core.Ability;
 
-namespace EpochLegends.Core.Hero.Factory
+namespace EpochLegends.Core.Hero
 {
     public class HeroFactory : MonoBehaviour
     {
@@ -114,7 +114,20 @@ namespace EpochLegends.Core.Hero.Factory
             if (owner != null && NetworkServer.active)
             {
                 heroInstance = Object.Instantiate(heroPrefab, position, rotation);
-                NetworkServer.Spawn(heroInstance, owner);
+                
+                // Spawn the hero on the network without owner initially
+                NetworkServer.Spawn(heroInstance);
+                
+                // Now try to assign authority if the connection is a NetworkConnectionToClient
+                NetworkIdentity netIdentity = heroInstance.GetComponent<NetworkIdentity>();
+                if (netIdentity != null && owner is NetworkConnectionToClient clientConnection)
+                {
+                    netIdentity.AssignClientAuthority(clientConnection);
+                }
+                else
+                {
+                    Debug.LogWarning("Could not assign client authority - connection is not a NetworkConnectionToClient");
+                }
             }
             else if (NetworkServer.active)
             {
@@ -140,8 +153,8 @@ namespace EpochLegends.Core.Hero.Factory
                 return null;
             }
             
-            // Notify managers about hero creation
-            FindObjectOfType<MonoBehaviour>()?.SendMessage("OnHeroCreated", hero, SendMessageOptions.DontRequireReceiver);
+            // Notify game manager about hero creation
+            EpochLegends.GameManager.Instance?.OnHeroCreated(hero);
             
             return hero;
         }
@@ -156,6 +169,7 @@ namespace EpochLegends.Core.Hero.Factory
             // This would normally include setting up abilities, configuring visuals, etc.
             SetupHeroAbilities(hero, definition);
             
+            // Log creation
             Debug.Log($"Hero created: {definition.DisplayName} (Team {teamId})");
         }
         

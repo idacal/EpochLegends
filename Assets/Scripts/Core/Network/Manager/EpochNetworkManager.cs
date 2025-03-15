@@ -1,8 +1,7 @@
 using UnityEngine;
 using Mirror;
-using System.Collections.Generic;
 
-namespace EpochLegends.Core.Network
+namespace EpochLegends.Core.Network.Manager
 {
     public class EpochNetworkManager : Mirror.NetworkManager
     {
@@ -13,18 +12,15 @@ namespace EpochLegends.Core.Network
         [SerializeField] private string serverPassword = "";
         [SerializeField] private int maxPlayers = 10;
 
-        [Header("References")]
-        [SerializeField] private GameObject playerPrefab;
+        // No necesitamos redefinir playerPrefab ya que ya existe en NetworkManager base
+        // Si necesitas acceder a él, usa la propiedad 'playerPrefab' de NetworkManager directamente
 
         public string ServerName => serverName;
         public bool HasPassword => !string.IsNullOrEmpty(serverPassword);
         public int MaxPlayers => maxPlayers;
 
-        // Use 'override' keyword to properly override the base class Awake
-        protected override void Awake()
+        public override void Awake()
         {
-            base.Awake();
-            
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
@@ -32,6 +28,7 @@ namespace EpochLegends.Core.Network
             }
 
             Instance = this;
+            base.Awake();
             DontDestroyOnLoad(gameObject);
         }
 
@@ -68,22 +65,14 @@ namespace EpochLegends.Core.Network
         {
             base.OnServerAddPlayer(conn);
             
-            // Get a reference to GameManager without hard dependency
-            var gameManager = FindObjectOfType<GameManager>();
-            if (gameManager != null)
-            {
-                gameManager.OnPlayerJoined(conn);
-            }
+            // Notify GameManager about new player
+            EpochLegends.GameManager.Instance?.OnPlayerJoined(conn);
         }
 
         public override void OnServerDisconnect(NetworkConnectionToClient conn)
         {
-            // Get a reference to GameManager without hard dependency
-            var gameManager = FindObjectOfType<GameManager>();
-            if (gameManager != null)
-            {
-                gameManager.OnPlayerLeft(conn);
-            }
+            // Notify GameManager about player disconnection
+            EpochLegends.GameManager.Instance?.OnPlayerLeft(conn);
             
             base.OnServerDisconnect(conn);
         }

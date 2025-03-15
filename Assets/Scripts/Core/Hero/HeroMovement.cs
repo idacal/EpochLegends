@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using Mirror;
 using System.Collections;
+using EpochLegends.Utils;
 
 namespace EpochLegends.Core.Hero
 {
@@ -45,7 +46,7 @@ namespace EpochLegends.Core.Hero
         // Property accessors
         public MovementState CurrentState => currentState;
         public Vector3 CurrentDestination => navAgent.destination;
-        public bool IsMoving => navAgent.velocity.magnitude > 0.1f;
+        public bool IsMoving => navAgent != null && navAgent.velocity.magnitude > 0.1f;
         
         #region Initialization
         
@@ -83,7 +84,7 @@ namespace EpochLegends.Core.Hero
             base.OnStartClient();
             
             // Disable NavMeshAgent on non-authority clients to prevent conflicts
-            if (!hasAuthority && navAgent != null)
+            if (!isLocalPlayer && navAgent != null)
             {
                 navAgent.enabled = false;
             }
@@ -100,7 +101,7 @@ namespace EpochLegends.Core.Hero
                 ServerMovementUpdate();
             }
             
-            if (isClient && hasAuthority)
+            if (isClient && isLocalPlayer)
             {
                 ClientMovementUpdate();
             }

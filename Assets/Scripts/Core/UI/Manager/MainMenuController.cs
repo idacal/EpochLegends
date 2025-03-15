@@ -1,179 +1,183 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.SceneManagement;
+using TMPro;
 using EpochLegends.Core.Network.Manager;
+using EpochLegends.Core.UI.Manager;
 
-namespace EpochLegends.Core.UI.Manager
+namespace EpochLegends.Core.UI.Menu
 {
-    public class MainMenuController : MonoBehaviour
+    public class MainMenuController : MonoBehaviour, IUIPanelController
     {
-        [Header("Menu Panels")]
-        [SerializeField] private GameObject mainMenuPanel;
-        [SerializeField] private GameObject joinGamePanel;
-        [SerializeField] private GameObject settingsPanel;
+        [Header("Main Menu Panels")]
+        [SerializeField] private GameObject mainPanel;
+        [SerializeField] private GameObject hostPanel;
+        [SerializeField] private GameObject joinPanel;
+        [SerializeField] private GameObject serverBrowserPanel;
         
-        [Header("Main Menu Buttons")]
-        [SerializeField] private Button hostGameButton;
-        [SerializeField] private Button joinGameButton;
-        [SerializeField] private Button settingsButton;
-        [SerializeField] private Button exitButton;
+        [Header("Host Game Settings")]
+        [SerializeField] private TMP_InputField hostGameNameInput;
+        [SerializeField] private TMP_InputField hostPasswordInput;
+        [SerializeField] private TMP_InputField maxPlayersInput;
+        [SerializeField] private Button createServerButton;
         
-        [Header("Join Game Panel")]
-        [SerializeField] private InputField ipAddressInput;
-        [SerializeField] private Button connectButton;
-        [SerializeField] private Button backFromJoinButton;
+        [Header("Join Game Settings")]
+        [SerializeField] private TMP_InputField joinIPInput;
+        [SerializeField] private TMP_InputField joinPasswordInput;
+        [SerializeField] private Button joinServerButton;
         
-        [Header("Settings Panel")]
-        [SerializeField] private Slider volumeSlider;
-        [SerializeField] private Toggle fullscreenToggle;
-        [SerializeField] private Dropdown qualityDropdown;
-        [SerializeField] private Button backFromSettingsButton;
-        
-        [Header("References")]
-        [SerializeField] private EpochNetworkManager networkManager;
-        
-        // For storing settings
-        private float masterVolume = 1.0f;
-        private bool isFullscreen = true;
-        private int qualityLevel = 3;
+        private EpochNetworkManager networkManager;
         
         private void Awake()
         {
-            // Find NetworkManager if not assigned
+            // Get the network manager
+            networkManager = EpochNetworkManager.Instance;
+            
             if (networkManager == null)
             {
-                networkManager = FindObjectOfType<EpochNetworkManager>();
-                
-                if (networkManager == null)
-                {
-                    Debug.LogError("EpochNetworkManager not found! Make sure it exists in the scene.");
-                }
+                Debug.LogError("NetworkManager instance not found!");
             }
             
-            // Initialize settings with saved values (if available)
-            LoadSettings();
-        }
-        
-        private void Start()
-        {
-            // Setup button listeners
+            // Set default values
+            if (maxPlayersInput != null)
+                maxPlayersInput.text = "10";
+                
+            if (hostGameNameInput != null)
+                hostGameNameInput.text = "Epoch Legends Server";
+                
+            if (joinIPInput != null)
+                joinIPInput.text = "localhost";
+                
+            // Set up button listeners
             SetupButtonListeners();
-            
-            // Initialize UI elements with current settings
-            InitializeSettingsUI();
-            
-            // Start with main menu panel only
-            ShowMainMenu();
         }
         
         private void SetupButtonListeners()
         {
-            // Main menu buttons
-            if (hostGameButton != null) hostGameButton.onClick.AddListener(OnHostGameClicked);
-            if (joinGameButton != null) joinGameButton.onClick.AddListener(OnJoinGameClicked);
-            if (settingsButton != null) settingsButton.onClick.AddListener(OnSettingsClicked);
-            if (exitButton != null) exitButton.onClick.AddListener(OnExitClicked);
+            // Find buttons if not assigned in inspector
+            if (createServerButton == null)
+                createServerButton = hostPanel.GetComponentInChildren<Button>();
+                
+            if (joinServerButton == null)
+                joinServerButton = joinPanel.GetComponentInChildren<Button>();
             
-            // Join game panel buttons
-            if (connectButton != null) connectButton.onClick.AddListener(OnConnectClicked);
-            if (backFromJoinButton != null) backFromJoinButton.onClick.AddListener(ShowMainMenu);
+            // Add listeners
+            if (createServerButton != null)
+                createServerButton.onClick.AddListener(CreateServer);
+                
+            if (joinServerButton != null)
+                joinServerButton.onClick.AddListener(JoinServer);
+                
+            // Find additional buttons in the main panel
+            if (mainPanel != null)
+            {
+                Button[] buttons = mainPanel.GetComponentsInChildren<Button>();
+                foreach (Button button in buttons)
+                {
+                    // Add listeners based on button name
+                    switch (button.name)
+                    {
+                        case "HostButton":
+                            button.onClick.AddListener(() => ShowPanel(hostPanel));
+                            break;
+                            
+                        case "JoinButton":
+                            button.onClick.AddListener(() => ShowPanel(joinPanel));
+                            break;
+                            
+                        case "BrowserButton":
+                            button.onClick.AddListener(() => ShowPanel(serverBrowserPanel));
+                            break;
+                            
+                        case "OptionsButton":
+                            button.onClick.AddListener(ShowOptions);
+                            break;
+                            
+                        case "QuitButton":
+                            button.onClick.AddListener(QuitGame);
+                            break;
+                    }
+                }
+            }
             
-            // Settings panel buttons
-            if (backFromSettingsButton != null) backFromSettingsButton.onClick.AddListener(ShowMainMenu);
-            
-            // Settings controls
-            if (volumeSlider != null) volumeSlider.onValueChanged.AddListener(OnVolumeChanged);
-            if (fullscreenToggle != null) fullscreenToggle.onValueChanged.AddListener(OnFullscreenToggled);
-            if (qualityDropdown != null) qualityDropdown.onValueChanged.AddListener(OnQualityChanged);
+            // Add back buttons to sub-panels
+            AddBackButtonListeners(hostPanel);
+            AddBackButtonListeners(joinPanel);
+            AddBackButtonListeners(serverBrowserPanel);
         }
         
-        private void InitializeSettingsUI()
+        private void AddBackButtonListeners(GameObject panel)
         {
-            if (volumeSlider != null) volumeSlider.value = masterVolume;
-            if (fullscreenToggle != null) fullscreenToggle.isOn = isFullscreen;
+            if (panel == null) return;
             
-            if (qualityDropdown != null)
+            Button[] buttons = panel.GetComponentsInChildren<Button>();
+            foreach (Button button in buttons)
             {
-                // Clear existing options
-                qualityDropdown.ClearOptions();
-                
-                // Add quality names from Quality Settings
-                string[] qualityNames = QualitySettings.names;
-                qualityDropdown.AddOptions(new System.Collections.Generic.List<string>(qualityNames));
-                
-                // Set current value
-                qualityDropdown.value = qualityLevel;
+                if (button.name.Contains("Back"))
+                {
+                    button.onClick.AddListener(() => ShowPanel(mainPanel));
+                }
             }
         }
         
-        #region Panel Management
-        
-        private void ShowMainMenu()
+        private void ShowPanel(GameObject targetPanel)
         {
-            if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
-            if (joinGamePanel != null) joinGamePanel.SetActive(false);
-            if (settingsPanel != null) settingsPanel.SetActive(false);
-        }
-        
-        private void ShowJoinGamePanel()
-        {
-            if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
-            if (joinGamePanel != null) joinGamePanel.SetActive(true);
-            if (settingsPanel != null) settingsPanel.SetActive(false);
+            // Hide all panels
+            if (mainPanel != null) mainPanel.SetActive(false);
+            if (hostPanel != null) hostPanel.SetActive(false);
+            if (joinPanel != null) joinPanel.SetActive(false);
+            if (serverBrowserPanel != null) serverBrowserPanel.SetActive(false);
             
-            // Focus on IP input field
-            if (ipAddressInput != null) ipAddressInput.Select();
-        }
-        
-        private void ShowSettingsPanel()
-        {
-            if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
-            if (joinGamePanel != null) joinGamePanel.SetActive(false);
-            if (settingsPanel != null) settingsPanel.SetActive(true);
-        }
-        
-        #endregion
-        
-        #region Button Event Handlers
-        
-        private void OnHostGameClicked()
-        {
-            Debug.Log("Starting as Host");
-            
-            if (networkManager != null)
+            // Show target panel
+            if (targetPanel != null)
             {
-                // Use default host parameters for now
-                // In a full implementation, you might want a configuration panel
-                networkManager.StartHost("Epoch Legends Server", "", 8);
-                
-                // Load the lobby scene
-                // In a real implementation, NetworkManager would handle scene changes
-                SceneManager.LoadScene("Lobby");
-            }
-            else
-            {
-                Debug.LogError("EpochNetworkManager not found when trying to host");
+                targetPanel.SetActive(true);
             }
         }
         
-        private void OnJoinGameClicked()
+        private void CreateServer()
         {
-            ShowJoinGamePanel();
+            if (networkManager == null) return;
+            
+            // Get server settings
+            string serverName = hostGameNameInput != null ? hostGameNameInput.text : "Epoch Legends Server";
+            string password = hostPasswordInput != null ? hostPasswordInput.text : "";
+            int maxPlayers = 10;
+            
+            if (maxPlayersInput != null && int.TryParse(maxPlayersInput.text, out int parsedMaxPlayers))
+            {
+                maxPlayers = Mathf.Clamp(parsedMaxPlayers, 2, 20);
+            }
+            
+            // Start hosting
+            networkManager.StartHost(serverName, password, maxPlayers);
+            
+            // Switch to lobby UI
+            UIManager.Instance?.ShowPanel(UIPanel.Lobby);
         }
         
-        private void OnSettingsClicked()
+        private void JoinServer()
         {
-            ShowSettingsPanel();
+            if (networkManager == null) return;
+            
+            // Get connection settings
+            string address = joinIPInput != null ? joinIPInput.text : "localhost";
+            string password = joinPasswordInput != null ? joinPasswordInput.text : "";
+            
+            // Join game
+            networkManager.JoinGame(address, password);
+            
+            // Show connecting UI
+            UIManager.Instance?.ShowPanel(UIPanel.Loading);
         }
         
-        private void OnExitClicked()
+        private void ShowOptions()
         {
-            Debug.Log("Exit requested");
-            
-            // Save settings before exit
-            SaveSettings();
-            
-            // Quit application
+            // Show options menu
+            UIManager.Instance?.ShowPanel(UIPanel.Options);
+        }
+        
+        private void QuitGame()
+        {
             #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
             #else
@@ -181,87 +185,17 @@ namespace EpochLegends.Core.UI.Manager
             #endif
         }
         
-        private void OnConnectClicked()
+        #region IUIPanelController Implementation
+        
+        public void OnPanelShown()
         {
-            if (ipAddressInput != null && !string.IsNullOrEmpty(ipAddressInput.text))
-            {
-                string ipAddress = ipAddressInput.text;
-                Debug.Log($"Connecting to server at {ipAddress}");
-                
-                if (networkManager != null)
-                {
-                    // Connect to the specified server
-                    networkManager.JoinGame(ipAddress, "");
-                    
-                    // NetworkManager will handle scene change upon successful connection
-                }
-                else
-                {
-                    Debug.LogError("EpochNetworkManager not found when trying to connect");
-                }
-            }
-            else
-            {
-                Debug.LogWarning("No IP address entered");
-                // You might want to show an error message to the user
-            }
+            // Ensure main panel is shown first
+            ShowPanel(mainPanel);
         }
         
-        #endregion
-        
-        #region Settings Handlers
-        
-        private void OnVolumeChanged(float volume)
+        public void OnPanelHidden()
         {
-            masterVolume = volume;
-            
-            // In a full implementation, this would update AudioManager or similar
-            AudioListener.volume = volume;
-            
-            Debug.Log($"Volume changed to {volume}");
-        }
-        
-        private void OnFullscreenToggled(bool isOn)
-        {
-            isFullscreen = isOn;
-            Screen.fullScreen = isOn;
-            
-            Debug.Log($"Fullscreen set to {isOn}");
-        }
-        
-        private void OnQualityChanged(int qualityIndex)
-        {
-            qualityLevel = qualityIndex;
-            QualitySettings.SetQualityLevel(qualityIndex);
-            
-            Debug.Log($"Quality set to {QualitySettings.names[qualityIndex]}");
-        }
-        
-        #endregion
-        
-        #region Settings Persistence
-        
-        private void LoadSettings()
-        {
-            // Load volume
-            masterVolume = PlayerPrefs.GetFloat("MasterVolume", 1.0f);
-            AudioListener.volume = masterVolume;
-            
-            // Load fullscreen setting
-            isFullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
-            Screen.fullScreen = isFullscreen;
-            
-            // Load quality setting
-            qualityLevel = PlayerPrefs.GetInt("QualityLevel", 3);
-            QualitySettings.SetQualityLevel(qualityLevel);
-        }
-        
-        private void SaveSettings()
-        {
-            PlayerPrefs.SetFloat("MasterVolume", masterVolume);
-            PlayerPrefs.SetInt("Fullscreen", isFullscreen ? 1 : 0);
-            PlayerPrefs.SetInt("QualityLevel", qualityLevel);
-            PlayerPrefs.Save();
+            // Clean up or cancel any ongoing processes
         }
         
         #endregion

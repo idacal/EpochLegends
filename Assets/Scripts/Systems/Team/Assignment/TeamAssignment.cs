@@ -2,6 +2,7 @@ using UnityEngine;
 using Mirror;
 using System.Collections.Generic;
 using EpochLegends.Systems.Team.Manager;
+using EpochLegends.Utils;
 
 namespace EpochLegends.Systems.Team.Assignment
 {
@@ -367,12 +368,10 @@ namespace EpochLegends.Systems.Team.Assignment
             // Convert NetIds to NetworkConnections
             foreach (uint netId in msg.memberNetIds)
             {
-                if (NetworkIdentity.spawned.TryGetValue(netId, out NetworkIdentity identity))
+                NetworkIdentity identity = NetworkUtils.GetNetworkIdentity(netId);
+                if (identity != null && identity.connectionToClient != null)
                 {
-                    if (identity.connectionToClient != null)
-                    {
-                        partyMembers.Add(identity.connectionToClient);
-                    }
+                    partyMembers.Add(identity.connectionToClient);
                 }
             }
             

@@ -307,7 +307,7 @@ Sistema que maneja la interacción del jugador con el juego a través de su hér
 - Integrado con **NetworkSystem**
 - Sincroniza estado de **Hero**
 - Coordina con **PlayerController** para autoridad
-- Interactúa con **NetworkManager** para gestión de conexión
+- Interactúa con **EpochNetworkManager** para gestión de conexión
 
 ### 1.4 Network System (Sistema de Red)
 Sistema que maneja todas las comunicaciones y sincronización en red del juego.
@@ -339,12 +339,12 @@ Sistema que maneja todas las comunicaciones y sincronización en red del juego.
 
 **Conexiones**:
 - Supervisa **MatchSystem** para progreso de partida
-- Coordina con **NetworkManager** para estado de red
+- Coordina con **EpochNetworkManager** para estado de red
 - Interactúa con **UISystem** para interfaces apropiadas
 - Coordina **PlayerSpawner** para entradas de jugadores
 - Comunica con **MatchmakingSystem** para setup de partida
 
-#### 1.4.3 NetworkManager
+#### 1.4.3 EpochNetworkManager
 **Descripción**: Gestiona conexiones y sincronización de red.  
 **Propósito**: Manejar toda la infraestructura de comunicación en red.  
 **Responsabilidades**:

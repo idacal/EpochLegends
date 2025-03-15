@@ -73,7 +73,7 @@
 ## Consideraciones Técnicas
 Basado en la arquitectura que has compartido, el flujo se implementaría así:
 
-- La selección Host/Cliente utilizaría los componentes de **NetworkManager** y **PlayerNetwork**
+- La selección Host/Cliente utilizaría los componentes de **EpochNetworkManager** y **PlayerNetwork**
 - La asignación de equipos sería manejada por **TeamAssignment** y **TeamManager**
 - La selección de héroes utilizaría **HeroSelectionManager**, **HeroSelectionUI** y **HeroRegistry**
 - El spawn de jugadores sería controlado por **PlayerSpawner** y **RespawnPoint**

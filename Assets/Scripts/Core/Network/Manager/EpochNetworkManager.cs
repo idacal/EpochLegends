@@ -1,9 +1,24 @@
 using UnityEngine;
 using Mirror;
+using UnityEngine.SceneManagement;
 
 namespace EpochLegends.Core.Network.Manager
 {
-    public class EpochNetworkManager : NetworkManager
+    // Define ReadyStateMessage here so it's available to this class
+    public struct ReadyStateMessage : NetworkMessage
+    {
+        public bool isReady;
+    }
+    
+    public struct GameStateRequestMessage : NetworkMessage {}
+    
+    public struct GameStateResponseMessage : NetworkMessage 
+    {
+        public int connectedPlayerCount;
+        public GameState currentGameState;
+    }
+
+    public class EpochNetworkManager : Mirror.NetworkManager
     {
         public static EpochNetworkManager Instance { get; private set; }
 
@@ -12,12 +27,6 @@ namespace EpochLegends.Core.Network.Manager
         [SerializeField] private string serverPassword = "";
         [SerializeField] private int maxPlayers = 10;
 
-        [Header("Scene References")]
-        [SerializeField] private string mainMenuScene = "MainMenu";
-        [SerializeField] private string lobbyScene = "Lobby";
-        [SerializeField] private string heroSelectionScene = "HeroSelection";
-        [SerializeField] private string gameplayScene = "Gameplay";
-
         public string ServerName => serverName;
         public bool HasPassword => !string.IsNullOrEmpty(serverPassword);
         public int MaxPlayers => maxPlayers;
@@ -25,7 +34,14 @@ namespace EpochLegends.Core.Network.Manager
         public override void Awake()
         {
             base.Awake();
-
+            
+            // Set these correctly for your project
+            offlineScene = "MainMenu"; // Your starting scene
+            onlineScene = "Lobby";     // Your lobby scene
+            
+            // These settings are crucial for proper synchronization:
+            clientLoadedScene = true;  // This is important!
+            
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
@@ -34,16 +50,6 @@ namespace EpochLegends.Core.Network.Manager
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
-
-            // Desactivar autoCreatePlayer para controlar manualmente la creación del jugador.
-            autoCreatePlayer = false;
-        }
-
-        [Server]
-        public void PrepareForSceneChange()
-        {
-            Debug.Log("Preparando para cambio de escena");
-            clientLoadedScene = false;
         }
 
         public void StartHost(string name, string password, int maxConnections)
@@ -53,25 +59,15 @@ namespace EpochLegends.Core.Network.Manager
             maxPlayers = maxConnections;
             
             NetworkServer.RegisterHandler<ServerPasswordMessage>(OnServerPasswordMessage);
-            
-            clientLoadedScene = false;
-            
+            NetworkServer.RegisterHandler<GameStateRequestMessage>(OnGameStateRequestMessage);
+            NetworkServer.RegisterHandler<ReadyStateMessage>(OnReadyStateMessage);
             StartHost();
-
-            if (NetworkServer.active && isNetworkActive)
-            {
-                PrepareForSceneChange();
-                ServerChangeScene(lobbyScene);
-            }
         }
 
         public void JoinGame(string address, string password)
         {
             networkAddress = address;
             serverPassword = password;
-            
-            clientLoadedScene = false;
-            
             StartClient();
         }
 
@@ -80,105 +76,97 @@ namespace EpochLegends.Core.Network.Manager
             if (NetworkServer.active && NetworkClient.isConnected)
             {
                 StopHost();
-                ServerChangeScene(mainMenuScene);
             }
             else if (NetworkClient.isConnected)
             {
                 StopClient();
-                ClientChangeScene(mainMenuScene, false);
             }
         }
 
-        // Sobrescribir la adición de jugadores para tener más control
         public override void OnServerAddPlayer(NetworkConnectionToClient conn)
         {
-            Debug.Log($"OnServerAddPlayer invocado para la conexión: {conn}");
-            if (conn.identity != null)
-            {
-                Debug.Log($"Eliminando jugador existente para la conexión {conn}");
-                // Usamos un cast para remover el jugador (1 equivale a destruir el objeto en esta versión)
-                NetworkServer.RemovePlayerForConnection(conn, (RemovePlayerOptions)1);
-            }
-            
             base.OnServerAddPlayer(conn);
+            
+            // Notify GameManager about new player
             GameManager.Instance?.OnPlayerJoined(conn);
-            Debug.Log($"Jugador creado para la conexión {conn}");
         }
 
         public override void OnServerDisconnect(NetworkConnectionToClient conn)
         {
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.OnPlayerLeft(conn);
-            }
+            // Notify GameManager about player disconnection
+            GameManager.Instance?.OnPlayerLeft(conn);
             
             base.OnServerDisconnect(conn);
-        }
-
-        public override void OnServerSceneChanged(string sceneName)
-        {
-            base.OnServerSceneChanged(sceneName);
-            Debug.Log($"Server changed to scene: {sceneName}");
-
-            if (sceneName == lobbyScene)
-            {
-                Debug.Log("Lobby scene loaded.");
-            }
-            else if (sceneName == gameplayScene) 
-            {
-                Debug.Log("Gameplay scene loaded.");
-            }
-        }
-
-        public override void OnClientSceneChanged()
-        {
-            base.OnClientSceneChanged();
-            Debug.Log($"Cliente escena cambiada: {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}");
         }
 
         public override void OnStartServer()
         {
             base.OnStartServer();
             Debug.Log($"Server started: {serverName}");
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.OnServerStarted();
-            }
         }
 
         public override void OnStartClient()
         {
             base.OnStartClient();
-            Debug.Log("Client started");
+            Debug.Log("Client started - registering message handlers");
+            
+            // Register handlers for client-specific messages
+            NetworkClient.RegisterHandler<GameStateResponseMessage>(OnGameStateResponseMessage);
+            NetworkClient.RegisterHandler<ReadyStateMessage>(OnReadyStateMessage);
         }
-
+        
         public override void OnClientConnect()
         {
             base.OnClientConnect();
-            Debug.Log("Client connected to server");
-
-            // Al conectarse, preparar al cliente y crear el jugador manualmente.
-            if (!NetworkClient.ready)
+            
+            if (!NetworkServer.active) // Pure client only (not host)
             {
-                NetworkClient.Ready();
-            }
-            // Llamamos a AddPlayer solo si aún no existe un jugador local.
-            if (NetworkClient.localPlayer == null)
-            {
-                NetworkClient.AddPlayer();
+                Debug.Log("Client connected - requesting game state");
+                NetworkClient.Send(new GameStateRequestMessage());
             }
         }
         
-        public override void OnStopClient()
+        public override void OnServerSceneChanged(string sceneName)
         {
-            base.OnStopClient();
-            if (!isNetworkActive)
+            base.OnServerSceneChanged(sceneName);
+            
+            Debug.Log($"Server scene changed to: {sceneName}");
+            
+            // Force clients to reload the scene
+            if (NetworkServer.active && sceneName == "Lobby")
             {
-                ClientChangeScene(mainMenuScene, false);
+                // Give objects time to initialize
+                Invoke("SyncClientState", 0.5f);
+            }
+        }
+        
+        private void SyncClientState()
+        {
+            // Send game state to all clients
+            foreach (var conn in NetworkServer.connections.Values)
+            {
+                if (conn != null && conn.identity != null && GameManager.Instance != null)
+                {
+                    GameManager.Instance.SendStateToClient(conn);
+                }
+            }
+        }
+        
+        public override void OnClientSceneChanged()
+        {
+            base.OnClientSceneChanged();
+            
+            Debug.Log($"Client scene changed to: {SceneManager.GetActiveScene().name}");
+            
+            // Request updated state for UI
+            if (NetworkClient.active && !NetworkServer.active)
+            {
+                Debug.Log("Client scene changed - requesting state update");
+                NetworkClient.Send(new GameStateRequestMessage());
             }
         }
 
-        // Manejo de mensajes de contraseña
+        // Password handling
         private struct ServerPasswordMessage : NetworkMessage
         {
             public string password;
@@ -193,20 +181,53 @@ namespace EpochLegends.Core.Network.Manager
             }
         }
         
-        // Método auxiliar para cambiar de escena en el cliente
-        public void ClientChangeScene(string sceneName, bool additive)
+        [Server]
+        private void OnGameStateRequestMessage(NetworkConnectionToClient conn, GameStateRequestMessage msg)
         {
-            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != sceneName)
+            Debug.Log($"Received game state request from client {conn.connectionId}");
+            
+            // Send current game state to the requesting client
+            if (GameManager.Instance != null)
             {
-                if (additive)
+                var responseMsg = new GameStateResponseMessage
                 {
-                    UnityEngine.SceneManagement.SceneManager.LoadSceneAsync(sceneName, UnityEngine.SceneManagement.LoadSceneMode.Additive);
-                }
-                else
-                {
-                    UnityEngine.SceneManagement.SceneManager.LoadSceneAsync(sceneName);
-                }
+                    connectedPlayerCount = GameManager.Instance.ConnectedPlayerCount,
+                    currentGameState = GameManager.Instance.CurrentState
+                };
+                
+                conn.Send(responseMsg);
+                
+                // Also have the GameManager send its specific state data
+                GameManager.Instance.SendStateToClient(conn);
             }
+        }
+        
+        [Server]
+        private void OnReadyStateMessage(NetworkConnectionToClient conn, ReadyStateMessage msg)
+        {
+            Debug.Log($"Server received ready state: {msg.isReady} from connection {conn.connectionId}");
+            
+            // Forward to game manager
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.SetPlayerReady(conn, msg.isReady);
+            }
+        }
+        
+        [Client]
+        private void OnGameStateResponseMessage(GameStateResponseMessage msg)
+        {
+            Debug.Log($"Received game state update: Players: {msg.connectedPlayerCount}, State: {msg.currentGameState}");
+            
+            // Update client-side display/state
+            // This is basic state, GameManager will handle more specific updates
+        }
+        
+        [Client]
+        private void OnReadyStateMessage(ReadyStateMessage msg)
+        {
+            Debug.Log($"Client received ready state message: {msg.isReady}");
+            // This is mostly for debug logging since the client doesn't need to do anything here
         }
     }
 }

@@ -371,6 +371,7 @@ GameObject:
   - component: {fileID: 6465607443038634933}
   - component: {fileID: 1253500763998711584}
   - component: {fileID: -2050063177460268956}
+  - component: {fileID: -944484988532598825}
   m_Layer: 5
   m_Name: PlayerSlot
   m_TagString: Untagged
@@ -459,3 +460,20 @@ MonoBehaviour:
   m_FlexibleWidth: 1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &-944484988532598825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7828448818585568207}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sceneId: 0
+  _assetId: 413599890
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0

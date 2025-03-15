@@ -24,10 +24,22 @@ namespace EpochLegends.Systems.Team.Manager
         [SerializeField] private TeamConfig[] teamConfigs = new TeamConfig[2];
         [SerializeField] private bool autoBalanceTeams = true;
         
-        // Team tracking
-        private readonly Dictionary<int, List<NetworkConnection>> playersByTeam = new Dictionary<int, List<NetworkConnection>>();
-        private readonly Dictionary<NetworkConnection, int> teamByPlayer = new Dictionary<NetworkConnection, int>();
-        private readonly Dictionary<int, List<Hero>> heroesByTeam = new Dictionary<int, List<Hero>>();
+        // Using standard SyncDictionaries with serializable types
+        private readonly SyncDictionary<int, string> playersByTeamSerialized = new SyncDictionary<int, string>();
+        private readonly SyncDictionary<uint, int> teamByPlayer = new SyncDictionary<uint, int>();
+        private readonly SyncDictionary<int, string> heroesByTeamSerialized = new SyncDictionary<int, string>();
+        
+        // Client-side dictionaries converted from the serialized versions
+        private Dictionary<int, List<uint>> playersByTeam = new Dictionary<int, List<uint>>();
+        private Dictionary<int, List<uint>> heroesByTeam = new Dictionary<int, List<uint>>();
+        
+        // Previous state for change detection
+        private Dictionary<int, string> prevPlayersByTeamSerialized = new Dictionary<int, string>();
+        private Dictionary<uint, int> prevTeamByPlayer = new Dictionary<uint, int>();
+        private Dictionary<int, string> prevHeroesByTeamSerialized = new Dictionary<int, string>();
+        
+        // Server-side cache for NetworkConnection to NetId mapping
+        private Dictionary<NetworkConnection, uint> connectionToNetId = new Dictionary<NetworkConnection, uint>();
         
         // Properties
         public int TeamCount => teamConfigs.Length;
@@ -54,19 +66,228 @@ namespace EpochLegends.Systems.Team.Manager
             // Additional server-side initialization if needed
         }
         
+        public override void OnStartClient()
+        {
+            base.OnStartClient();
+            
+            // Initialize local dictionaries
+            UpdateLocalDictionaries();
+            
+            // Start monitoring for dictionary changes
+            StartCoroutine(MonitorDictionaryChanges());
+        }
+        
+        // Use a coroutine to monitor for dictionary changes instead of callbacks
+        private System.Collections.IEnumerator MonitorDictionaryChanges()
+        {
+            // Initialize previous state
+            UpdatePreviousState();
+            
+            while (true)
+            {
+                // Check for changes in playersByTeamSerialized
+                foreach (var kvp in playersByTeamSerialized)
+                {
+                    if (!prevPlayersByTeamSerialized.TryGetValue(kvp.Key, out string prevValue) || 
+                        prevValue != kvp.Value)
+                    {
+                        // Update local dictionary
+                        playersByTeam[kvp.Key] = DeserializeUintList(kvp.Value);
+                        
+                        // Trigger change event
+                        OnTeamPlayersChanged(kvp.Key);
+                    }
+                }
+                
+                // Check for removed teams in playersByTeamSerialized
+                List<int> keysToRemove = new List<int>();
+                foreach (var prevKvp in prevPlayersByTeamSerialized)
+                {
+                    if (!playersByTeamSerialized.ContainsKey(prevKvp.Key))
+                    {
+                        keysToRemove.Add(prevKvp.Key);
+                    }
+                }
+                
+                foreach (int key in keysToRemove)
+                {
+                    playersByTeam.Remove(key);
+                    OnTeamPlayersChanged(key);
+                }
+                
+                // Check for changes in teamByPlayer
+                foreach (var kvp in teamByPlayer)
+                {
+                    if (!prevTeamByPlayer.TryGetValue(kvp.Key, out int prevValue) || 
+                        prevValue != kvp.Value)
+                    {
+                        // Trigger change event
+                        OnPlayerTeamChanged(kvp.Key, kvp.Value);
+                    }
+                }
+                
+                // Check for removed players in teamByPlayer
+                List<uint> playerKeysToRemove = new List<uint>();
+                foreach (var prevKvp in prevTeamByPlayer)
+                {
+                    if (!teamByPlayer.ContainsKey(prevKvp.Key))
+                    {
+                        playerKeysToRemove.Add(prevKvp.Key);
+                    }
+                }
+                
+                foreach (uint key in playerKeysToRemove)
+                {
+                    OnPlayerTeamChanged(key, -1); // -1 indicates removal
+                }
+                
+                // Check for changes in heroesByTeamSerialized
+                foreach (var kvp in heroesByTeamSerialized)
+                {
+                    if (!prevHeroesByTeamSerialized.TryGetValue(kvp.Key, out string prevValue) || 
+                        prevValue != kvp.Value)
+                    {
+                        // Update local dictionary
+                        heroesByTeam[kvp.Key] = DeserializeUintList(kvp.Value);
+                        
+                        // Trigger change event
+                        OnTeamHeroesChanged(kvp.Key);
+                    }
+                }
+                
+                // Check for removed teams in heroesByTeamSerialized
+                keysToRemove.Clear();
+                foreach (var prevKvp in prevHeroesByTeamSerialized)
+                {
+                    if (!heroesByTeamSerialized.ContainsKey(prevKvp.Key))
+                    {
+                        keysToRemove.Add(prevKvp.Key);
+                    }
+                }
+                
+                foreach (int key in keysToRemove)
+                {
+                    heroesByTeam.Remove(key);
+                    OnTeamHeroesChanged(key);
+                }
+                
+                // Update previous state
+                UpdatePreviousState();
+                
+                // Wait before checking again
+                yield return new WaitForSeconds(0.2f);
+            }
+        }
+        
+        // Update the previous state for change detection
+        private void UpdatePreviousState()
+        {
+            // Update playersByTeamSerialized
+            prevPlayersByTeamSerialized.Clear();
+            foreach (var kvp in playersByTeamSerialized)
+            {
+                prevPlayersByTeamSerialized[kvp.Key] = kvp.Value;
+            }
+            
+            // Update teamByPlayer
+            prevTeamByPlayer.Clear();
+            foreach (var kvp in teamByPlayer)
+            {
+                prevTeamByPlayer[kvp.Key] = kvp.Value;
+            }
+            
+            // Update heroesByTeamSerialized
+            prevHeroesByTeamSerialized.Clear();
+            foreach (var kvp in heroesByTeamSerialized)
+            {
+                prevHeroesByTeamSerialized[kvp.Key] = kvp.Value;
+            }
+        }
+        
         // Initialize team tracking dictionaries
         private void InitializeTeamDictionaries()
         {
-            playersByTeam.Clear();
-            teamByPlayer.Clear();
-            heroesByTeam.Clear();
-            
             // Initialize dictionaries for each team
             foreach (var config in teamConfigs)
             {
-                playersByTeam[config.teamId] = new List<NetworkConnection>();
-                heroesByTeam[config.teamId] = new List<Hero>();
+                if (!playersByTeam.ContainsKey(config.teamId))
+                {
+                    playersByTeam[config.teamId] = new List<uint>();
+                    // Initialize with empty list serialized as string
+                    if (!playersByTeamSerialized.ContainsKey(config.teamId))
+                        playersByTeamSerialized[config.teamId] = "";
+                }
+                
+                if (!heroesByTeam.ContainsKey(config.teamId))
+                {
+                    heroesByTeam[config.teamId] = new List<uint>();
+                    // Initialize with empty list serialized as string
+                    if (!heroesByTeamSerialized.ContainsKey(config.teamId))
+                        heroesByTeamSerialized[config.teamId] = "";
+                }
             }
+            
+            Debug.Log($"Team dictionaries initialized for {teamConfigs.Length} teams");
+        }
+        
+        // Utility method to serialize a uint list as comma-separated string
+        private string SerializeUintList(List<uint> list)
+        {
+            return string.Join(",", list);
+        }
+        
+        // Utility method to deserialize a comma-separated string to uint list
+        private List<uint> DeserializeUintList(string serialized)
+        {
+            List<uint> result = new List<uint>();
+            if (string.IsNullOrEmpty(serialized))
+                return result;
+                
+            string[] parts = serialized.Split(',');
+            foreach (string part in parts)
+            {
+                if (!string.IsNullOrEmpty(part) && uint.TryParse(part, out uint value))
+                {
+                    result.Add(value);
+                }
+            }
+            
+            return result;
+        }
+        
+        // Update client-side dictionaries based on serialized versions
+        private void UpdateLocalDictionaries()
+        {
+            // Update playersByTeam
+            foreach (var kvp in playersByTeamSerialized)
+            {
+                playersByTeam[kvp.Key] = DeserializeUintList(kvp.Value);
+            }
+            
+            // Update heroesByTeam
+            foreach (var kvp in heroesByTeamSerialized)
+            {
+                heroesByTeam[kvp.Key] = DeserializeUintList(kvp.Value);
+            }
+        }
+        
+        // Event handlers for dictionary changes
+        private void OnTeamPlayersChanged(int teamId)
+        {
+            Debug.Log($"Players in team {teamId} changed");
+            // Update UI for team members
+        }
+        
+        private void OnPlayerTeamChanged(uint playerId, int teamId)
+        {
+            Debug.Log($"Player {playerId} team assignment changed to team {teamId}");
+            // Update player UI for team assignment
+        }
+        
+        private void OnTeamHeroesChanged(int teamId)
+        {
+            Debug.Log($"Heroes in team {teamId} changed");
+            // Update UI for team heroes
         }
         
         #region Team Assignment
@@ -74,8 +295,13 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public int AssignPlayerToTeam(NetworkConnection player)
         {
+            if (player.identity == null) return -1;
+            
+            uint netId = player.identity.netId;
+            connectionToNetId[player] = netId;
+            
             // If player already has a team, return that team
-            if (teamByPlayer.TryGetValue(player, out int existingTeam))
+            if (teamByPlayer.TryGetValue(netId, out int existingTeam))
             {
                 return existingTeam;
             }
@@ -100,6 +326,9 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public bool RequestTeamChange(NetworkConnection player, int newTeamId)
         {
+            if (player.identity == null) return false;
+            uint netId = player.identity.netId;
+            
             // Validate team ID
             if (!IsValidTeamId(newTeamId))
             {
@@ -119,10 +348,7 @@ namespace EpochLegends.Systems.Team.Manager
             AssignToTeam(player, newTeamId);
             
             // Notify clients about team change
-            if (player.identity != null)
-            {
-                RpcNotifyTeamChange(player.identity.netId, oldTeamId, newTeamId);
-            }
+            RpcNotifyTeamChange(netId, oldTeamId, newTeamId);
             
             return true;
         }
@@ -130,6 +356,10 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         private void AssignToTeam(NetworkConnection player, int teamId)
         {
+            if (player.identity == null) return;
+            uint netId = player.identity.netId;
+            connectionToNetId[player] = netId;
+            
             if (!IsValidTeamId(teamId))
             {
                 Debug.LogError($"Cannot assign player to invalid team ID: {teamId}");
@@ -137,28 +367,35 @@ namespace EpochLegends.Systems.Team.Manager
             }
             
             // Add to team tracking
-            if (!playersByTeam[teamId].Contains(player))
+            if (!playersByTeam.ContainsKey(teamId))
             {
-                playersByTeam[teamId].Add(player);
+                playersByTeam[teamId] = new List<uint>();
+            }
+            
+            if (!playersByTeam[teamId].Contains(netId))
+            {
+                playersByTeam[teamId].Add(netId);
+                // Update the serialized version
+                playersByTeamSerialized[teamId] = SerializeUintList(playersByTeam[teamId]);
             }
             
             // Update player-to-team mapping
-            teamByPlayer[player] = teamId;
+            teamByPlayer[netId] = teamId;
             
             // Notify the player about their team assignment
-            if (player.identity != null)
-            {
-                TargetNotifyTeamAssignment(player, teamId);
-            }
+            TargetNotifyTeamAssignment(player, teamId);
             
-            Debug.Log($"Player assigned to team {teamId}");
+            Debug.Log($"Player {netId} assigned to team {teamId}");
         }
         
         [Server]
         private int RemoveFromCurrentTeam(NetworkConnection player)
         {
+            if (player.identity == null) return -1;
+            uint netId = player.identity.netId;
+            
             // If player isn't assigned to a team, return -1
-            if (!teamByPlayer.TryGetValue(player, out int currentTeam))
+            if (!teamByPlayer.TryGetValue(netId, out int currentTeam))
             {
                 return -1;
             }
@@ -166,11 +403,13 @@ namespace EpochLegends.Systems.Team.Manager
             // Remove from team list
             if (playersByTeam.ContainsKey(currentTeam))
             {
-                playersByTeam[currentTeam].Remove(player);
+                playersByTeam[currentTeam].Remove(netId);
+                // Update the serialized version
+                playersByTeamSerialized[currentTeam] = SerializeUintList(playersByTeam[currentTeam]);
             }
             
             // Remove from mapping
-            teamByPlayer.Remove(player);
+            teamByPlayer.Remove(netId);
             
             return currentTeam;
         }
@@ -191,8 +430,7 @@ namespace EpochLegends.Systems.Team.Manager
         private void RpcNotifyTeamChange(uint playerNetId, int oldTeamId, int newTeamId)
         {
             // Client-side notification of team change for any player
-            NetworkIdentity identity = null;
-            if (NetworkClient.spawned.TryGetValue(playerNetId, out identity))
+            if (NetworkClient.spawned.TryGetValue(playerNetId, out NetworkIdentity identity))
             {
                 Debug.Log($"Player {identity.name} changed from team {oldTeamId} to {newTeamId}");
                 
@@ -208,7 +446,7 @@ namespace EpochLegends.Systems.Team.Manager
             foreach (var config in teamConfigs)
             {
                 int teamId = config.teamId;
-                int playerCount = playersByTeam[teamId].Count;
+                int playerCount = playersByTeam.ContainsKey(teamId) ? playersByTeam[teamId].Count : 0;
                 
                 if (playerCount < smallestCount)
                 {
@@ -227,13 +465,21 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public void RegisterHero(Hero hero, int teamId)
         {
-            if (!IsValidTeamId(teamId) || hero == null)
-                return;
-                
+            if (!IsValidTeamId(teamId) || hero == null) return;
+            
+            uint heroNetId = hero.netId;
+            
             // Add hero to team tracking
-            if (!heroesByTeam[teamId].Contains(hero))
+            if (!heroesByTeam.ContainsKey(teamId))
             {
-                heroesByTeam[teamId].Add(hero);
+                heroesByTeam[teamId] = new List<uint>();
+            }
+            
+            if (!heroesByTeam[teamId].Contains(heroNetId))
+            {
+                heroesByTeam[teamId].Add(heroNetId);
+                // Update the serialized version
+                heroesByTeamSerialized[teamId] = SerializeUintList(heroesByTeam[teamId]);
                 
                 // Set the hero's team
                 hero.SetTeamId(teamId);
@@ -248,14 +494,17 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public void UnregisterHero(Hero hero)
         {
-            if (hero == null)
-                return;
-                
+            if (hero == null) return;
+            
             int teamId = hero.TeamId;
+            uint heroNetId = hero.netId;
             
             if (IsValidTeamId(teamId) && heroesByTeam.ContainsKey(teamId))
             {
-                heroesByTeam[teamId].Remove(hero);
+                heroesByTeam[teamId].Remove(heroNetId);
+                // Update the serialized version
+                heroesByTeamSerialized[teamId] = SerializeUintList(heroesByTeam[teamId]);
+                
                 Debug.Log($"Hero {hero.name} unregistered from team {teamId}");
             }
         }
@@ -266,35 +515,21 @@ namespace EpochLegends.Systems.Team.Manager
             // Apply team colors, effects, etc.
             TeamConfig config = GetTeamConfig(teamId);
             
-            // Example: This would be replaced with your own visual system
-            // For example, you might have a HeroVisuals component that handles team coloring
-            
             // Notify clients to update visuals
-            if (hero.netIdentity != null)
-            {
-                RpcApplyTeamVisuals(hero.netIdentity.netId, teamId);
-            }
+            RpcApplyTeamVisuals(hero.netId, teamId);
         }
         
         [ClientRpc]
         private void RpcApplyTeamVisuals(uint heroNetId, int teamId)
         {
             // Client-side application of team visuals
-            NetworkIdentity identity = null;
-            if (NetworkClient.spawned.TryGetValue(heroNetId, out identity))
+            if (NetworkClient.spawned.TryGetValue(heroNetId, out NetworkIdentity identity))
             {
                 Hero hero = identity.GetComponent<Hero>();
                 if (hero != null)
                 {
                     TeamConfig config = GetTeamConfig(teamId);
                     // Apply visual changes (renderer colors, particle effects, etc.)
-                    
-                    // For example:
-                    // Renderer[] renderers = hero.GetComponentsInChildren<Renderer>();
-                    // foreach (var renderer in renderers)
-                    // {
-                    //     // Apply team color to materials
-                    // }
                     
                     Debug.Log($"Applied team {teamId} visuals to hero {hero.name}");
                 }
@@ -337,17 +572,32 @@ namespace EpochLegends.Systems.Team.Manager
         
         public List<Hero> GetTeamHeroes(int teamId)
         {
+            List<Hero> heroes = new List<Hero>();
+            
             if (IsValidTeamId(teamId) && heroesByTeam.ContainsKey(teamId))
             {
-                return new List<Hero>(heroesByTeam[teamId]);
+                foreach (uint heroNetId in heroesByTeam[teamId])
+                {
+                    if (NetworkClient.spawned.TryGetValue(heroNetId, out NetworkIdentity identity))
+                    {
+                        Hero hero = identity.GetComponent<Hero>();
+                        if (hero != null)
+                        {
+                            heroes.Add(hero);
+                        }
+                    }
+                }
             }
             
-            return new List<Hero>();
+            return heroes;
         }
         
         public int GetPlayerTeam(NetworkConnection player)
         {
-            if (teamByPlayer.TryGetValue(player, out int teamId))
+            if (player.identity == null) return -1;
+            
+            uint netId = player.identity.netId;
+            if (teamByPlayer.TryGetValue(netId, out int teamId))
             {
                 return teamId;
             }

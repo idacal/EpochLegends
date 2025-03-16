@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Mirror;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using EpochLegends.Systems.Team.Manager;
@@ -65,13 +66,75 @@ namespace EpochLegends.UI.Lobby
         
         private void FindManagers()
         {
-            teamManager = FindObjectOfType<TeamManager>();
-            teamAssignment = FindObjectOfType<TeamAssignment>();
+            // First try direct find
+            teamManager = FindObjectOfType<EpochLegends.Systems.Team.Manager.TeamManager>();
+            teamAssignment = FindObjectOfType<EpochLegends.Systems.Team.Assignment.TeamAssignment>();
             gameManager = FindObjectOfType<EpochLegends.GameManager>();
-
-            if (teamManager == null || gameManager == null)
+            
+            // If not found, try looking through the ManagersController
+            if (teamManager == null || teamAssignment == null || gameManager == null)
             {
-                Debug.LogError("No se encontraron los managers requeridos en la escena.");
+                EpochLegends.Core.ManagersController controller = FindObjectOfType<EpochLegends.Core.ManagersController>();
+                if (controller != null)
+                {
+                    if (teamManager == null)
+                        teamManager = controller.GetManager<EpochLegends.Systems.Team.Manager.TeamManager>("TeamManager");
+                        
+                    if (teamAssignment == null)
+                        teamAssignment = controller.GetManager<EpochLegends.Systems.Team.Assignment.TeamAssignment>("TeamAssignment");
+                        
+                    if (gameManager == null)
+                        gameManager = controller.GetManager<EpochLegends.GameManager>("GameManager");
+                }
+            }
+            
+            if (teamManager == null || teamAssignment == null || gameManager == null)
+            {
+                // Log which managers are missing
+                string missing = "";
+                if (teamManager == null) missing += "TeamManager, ";
+                if (teamAssignment == null) missing += "TeamAssignment, ";
+                if (gameManager == null) missing += "GameManager, ";
+                
+                Debug.LogError($"No se encontraron los managers requeridos en la escena: {missing.TrimEnd(',', ' ')}");
+                
+                // Try one last time with a delay
+                StartCoroutine(DelayedManagerFind());
+            }
+            else
+            {
+                Debug.Log("All required managers found successfully.");
+            }
+        }
+
+        private System.Collections.IEnumerator DelayedManagerFind()
+        {
+            Debug.Log("Attempting delayed manager find...");
+            
+            // Wait a short time to ensure DontDestroyOnLoad objects are properly initialized
+            yield return new WaitForSeconds(0.5f);
+            
+            // Try again
+            teamManager = FindObjectOfType<EpochLegends.Systems.Team.Manager.TeamManager>();
+            teamAssignment = FindObjectOfType<EpochLegends.Systems.Team.Assignment.TeamAssignment>();
+            gameManager = FindObjectOfType<EpochLegends.GameManager>();
+            
+            if (teamManager == null || teamAssignment == null || gameManager == null)
+            {
+                string missing = "";
+                if (teamManager == null) missing += "TeamManager, ";
+                if (teamAssignment == null) missing += "TeamAssignment, ";
+                if (gameManager == null) missing += "GameManager, ";
+                
+                Debug.LogError($"Still couldn't find managers after delay: {missing.TrimEnd(',', ' ')}");
+            }
+            else
+            {
+                Debug.Log("All required managers found after delay!");
+                
+                // Since we found the managers after the delay, we need to setup the UI
+                SetupButtonListeners();
+                RefreshUI();
             }
         }
         
@@ -143,7 +206,8 @@ namespace EpochLegends.UI.Lobby
         private void OnDestroy()
         {
             // Asegurarse de desuscribirse de eventos cuando el objeto se destruye
-            EpochLegends.GameManager.OnPlayerDataChanged -= OnPlayerDataChanged;
+            if (gameManager != null)
+                EpochLegends.GameManager.OnPlayerDataChanged -= OnPlayerDataChanged;
         }
         
         private void OnPlayerDataChanged()

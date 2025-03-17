@@ -126,8 +126,15 @@ namespace EpochLegends.Core.Network
             
             if (debugSync)
                 Debug.Log("[LobbyDataSynchronizer] Requesting lobby data from server");
-                
-            NetworkClient.Send(new LobbyDataRequestMessage { fullRefresh = true });
+            
+            try
+            {
+                NetworkClient.Send(new LobbyDataRequestMessage { fullRefresh = true });
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[LobbyDataSynchronizer] Failed to request lobby data: {ex.Message}");
+            }
         }
         
         [Server]
@@ -302,8 +309,15 @@ namespace EpochLegends.Core.Network
             
             if (debugSync)
                 Debug.Log("[LobbyDataSynchronizer] Force requesting refresh");
-                
-            RequestLobbyData();
+            
+            try
+            {
+                RequestLobbyData();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[LobbyDataSynchronizer] Error during force refresh: {ex.Message}");
+            }
         }
     }
 }

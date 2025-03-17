@@ -27,6 +27,7 @@ namespace EpochLegends.Core.Network.Manager
         // Track last state refresh
         private float lastRefreshTime = 0f;
         private const float REFRESH_INTERVAL = 1.0f;
+        private bool isConnectedToServer = false;
 
         public override void Awake()
         {
@@ -90,6 +91,8 @@ namespace EpochLegends.Core.Network.Manager
             {
                 StopClient();
             }
+            
+            isConnectedToServer = false;
         }
 
         public override void OnServerAddPlayer(NetworkConnectionToClient conn)
@@ -176,8 +179,14 @@ namespace EpochLegends.Core.Network.Manager
             // Register client-side message handlers
             NetworkClient.RegisterHandler<GameStateResponseMessage>(OnGameStateResponseMessage);
             
+            // Wait a bit before requesting state updates to ensure connection is established
+            Invoke(nameof(DelayedRequestFullStateUpdate), 1.5f);
+        }
+        
+        private void DelayedRequestFullStateUpdate()
+        {
             // Force refresh of server list for all connected clients
-            Invoke(nameof(RequestFullStateUpdate), 1.0f);
+            RequestFullStateUpdate();
         }
         
         // Override keyword to properly extend the base class method
@@ -186,7 +195,7 @@ namespace EpochLegends.Core.Network.Manager
             base.Update(); // Call base class Update first
             
             // Periodically refresh for all clients (host y pure clients)
-            if (NetworkClient.active)
+            if (NetworkClient.active && NetworkClient.isConnected && isConnectedToServer)
             {
                 if (Time.time - lastRefreshTime >= REFRESH_INTERVAL)
                 {
@@ -198,12 +207,19 @@ namespace EpochLegends.Core.Network.Manager
         
         private void RequestFullStateUpdate()
         {
-            if (NetworkClient.active)
+            if (NetworkClient.active && NetworkClient.isConnected)
             {
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Requesting full state update");
                     
-                NetworkClient.Send(new GameStateRequestMessage());
+                try
+                {
+                    NetworkClient.Send(new GameStateRequestMessage());
+                }
+                catch(System.Exception ex)
+                {
+                    Debug.LogWarning($"[NetworkManager] Failed to request state update: {ex.Message}");
+                }
             }
         }
         
@@ -211,16 +227,34 @@ namespace EpochLegends.Core.Network.Manager
         {
             base.OnClientConnect();
             
+            isConnectedToServer = true;
+            
             // All clients should request game state (host and pure clients)
             if (debugNetwork)
                 Debug.Log("[NetworkManager] Client connected - requesting game state");
                 
-            NetworkClient.Send(new GameStateRequestMessage());
+            try
+            {
+                NetworkClient.Send(new GameStateRequestMessage());
+            }
+            catch(System.Exception ex)
+            {
+                Debug.LogWarning($"[NetworkManager] Failed to send initial state request: {ex.Message}");
+            }
             
             // Force several refreshes to make sure data gets synced correctly
             Invoke(nameof(RequestFullStateUpdate), 0.5f);
             Invoke(nameof(RequestFullStateUpdate), 1.0f);
             Invoke(nameof(RequestFullStateUpdate), 2.0f);
+        }
+
+        public override void OnClientDisconnect()
+        {
+            if (debugNetwork)
+                Debug.Log("[NetworkManager] Client disconnected from server");
+                
+            isConnectedToServer = false;
+            base.OnClientDisconnect();
         }
         
         public override void OnServerSceneChanged(string sceneName)
@@ -261,12 +295,19 @@ namespace EpochLegends.Core.Network.Manager
                 Debug.Log($"[NetworkManager] Client scene changed to: {SceneManager.GetActiveScene().name}");
             
             // Request updated state for UI (for both host and pure clients)
-            if (NetworkClient.active)
+            if (NetworkClient.active && NetworkClient.isConnected)
             {
                 if (debugNetwork)
                     Debug.Log("[NetworkManager] Client scene changed - requesting state update");
                     
-                NetworkClient.Send(new GameStateRequestMessage());
+                try
+                {
+                    NetworkClient.Send(new GameStateRequestMessage());
+                }
+                catch(System.Exception ex)
+                {
+                    Debug.LogWarning($"[NetworkManager] Failed to request state after scene change: {ex.Message}");
+                }
                 
                 // Force refresh after a short delay
                 Invoke(nameof(RequestFullStateUpdate), 0.5f);
@@ -334,6 +375,14 @@ namespace EpochLegends.Core.Network.Manager
             {
                 EpochLegends.GameManager.Instance.SetPlayerReady(conn, msg.isReady);
             }
+        }
+        
+        /// <summary>
+        /// Checks if the client is connected to a server and is safe to send messages
+        /// </summary>
+        public bool IsClientConnected()
+        {
+            return NetworkClient.active && NetworkClient.isConnected && isConnectedToServer;
         }
     }
 }

@@ -21,6 +21,7 @@ namespace EpochLegends.Utils.Debug
         private int failedSpawns = 0;
         private StreamWriter logWriter;
         private string lastScene = "";
+        private bool fileLogEnabled = true;
 
         public static NetworkDiagnostics Instance { get; private set; }
 
@@ -35,21 +36,39 @@ namespace EpochLegends.Utils.Debug
             Instance = this;
             DontDestroyOnLoad(gameObject);
             
-            Log($"NetworkDiagnostics initialized at {System.DateTime.Now}");
-            
+            // Generate a unique log file path for each instance to avoid sharing violations
             if (logToFile)
             {
+                // Create a unique log file for each session using timestamp and process ID
+                string directory = Path.GetDirectoryName(logFilePath);
+                string filename = Path.GetFileNameWithoutExtension(logFilePath);
+                string extension = Path.GetExtension(logFilePath);
+                
+                // Create a unique log file name using timestamp and a random number
+                string uniqueLogFile = string.IsNullOrEmpty(directory) ?
+                    $"{filename}_{System.DateTime.Now.ToString("yyyyMMdd_HHmmss")}_{Random.Range(1000, 9999)}{extension}" :
+                    Path.Combine(directory, $"{filename}_{System.DateTime.Now.ToString("yyyyMMdd_HHmmss")}_{Random.Range(1000, 9999)}{extension}");
+                
                 try
                 {
-                    logWriter = new StreamWriter(logFilePath, true);
+                    // Try opening the file - if we can't, disable file logging
+                    logWriter = new StreamWriter(uniqueLogFile, true);
                     logWriter.WriteLine($"=== Network Diagnostics Started at {System.DateTime.Now} ===");
+                    logWriter.WriteLine($"Active Scene: {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}");
+                    logWriter.WriteLine($"Network Mode: {(NetworkServer.active ? "Server" : "Client")}");
                     logWriter.Flush();
+                    
+                    UnityEngine.Debug.Log($"[NetworkDiagnostics] Logging to file: {uniqueLogFile}");
                 }
                 catch (System.Exception e)
                 {
-                    UnityEngine.Debug.LogError($"Failed to open log file: {e.Message}");
+                    fileLogEnabled = false;
+                    logWriter = null;
+                    UnityEngine.Debug.LogWarning($"[NetworkDiagnostics] File logging disabled: {e.Message}");
                 }
             }
+            
+            Log($"NetworkDiagnostics initialized at {System.DateTime.Now}");
         }
         
         private void Start()
@@ -62,15 +81,22 @@ namespace EpochLegends.Utils.Debug
         {
             if (logWriter != null)
             {
-                logWriter.WriteLine($"=== Network Diagnostics Stopped at {System.DateTime.Now} ===");
-                logWriter.Close();
+                try
+                {
+                    logWriter.WriteLine($"=== Network Diagnostics Stopped at {System.DateTime.Now} ===");
+                    logWriter.Close();
+                }
+                catch (System.Exception e)
+                {
+                    UnityEngine.Debug.LogWarning($"[NetworkDiagnostics] Error closing log file: {e.Message}");
+                }
                 logWriter = null;
             }
         }
         
         private void Update()
         {
-            // Monitorear cambios de escena
+            // Monitor scene changes
             string currentScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
             if (currentScene != lastScene)
             {
@@ -88,23 +114,23 @@ namespace EpochLegends.Utils.Debug
             }
         }
         
-        // Monitorear objetos de red periódicamente
+        // Monitor network objects periodically
         private void MonitorNetworkObjects()
         {
-            // Actualizar copia del frame anterior
+            // Update previous frame copy
             lastFrameSpawnedObjects.Clear();
             foreach (var kvp in spawnedObjects)
             {
                 lastFrameSpawnedObjects[kvp.Key] = kvp.Value;
             }
             
-            // Limpiar la lista actual
+            // Clear current list
             spawnedObjects.Clear();
             
-            // En el servidor
+            // On server
             if (NetworkServer.active)
             {
-                // Monitorear spawns en el servidor
+                // Monitor server spawns
                 foreach (var kvp in NetworkServer.spawned)
                 {
                     uint netId = kvp.Key;
@@ -114,7 +140,7 @@ namespace EpochLegends.Utils.Debug
                     {
                         spawnedObjects[netId] = identity.name;
                         
-                        // Si es un objeto nuevo
+                        // If new object
                         if (!lastFrameSpawnedObjects.ContainsKey(netId))
                         {
                             totalSpawns++;
@@ -123,7 +149,7 @@ namespace EpochLegends.Utils.Debug
                     }
                 }
                 
-                // Detectar despawns en el servidor
+                // Detect server despawns
                 foreach (var kvp in lastFrameSpawnedObjects)
                 {
                     if (!spawnedObjects.ContainsKey(kvp.Key))
@@ -133,10 +159,10 @@ namespace EpochLegends.Utils.Debug
                 }
             }
             
-            // En el cliente puro
+            // On pure client
             if (NetworkClient.active && !NetworkServer.active)
             {
-                // Monitorear spawns en el cliente
+                // Monitor client spawns
                 foreach (var kvp in NetworkClient.spawned)
                 {
                     uint netId = kvp.Key;
@@ -146,7 +172,7 @@ namespace EpochLegends.Utils.Debug
                     {
                         spawnedObjects[netId] = identity.name;
                         
-                        // Si es un objeto nuevo
+                        // If new object
                         if (!lastFrameSpawnedObjects.ContainsKey(netId))
                         {
                             Log($"CLIENT SPAWN: {identity.name}, NetID: {netId}, SceneID: {identity.sceneId.ToString("X")}, AssetID: {identity.assetId}");
@@ -154,7 +180,7 @@ namespace EpochLegends.Utils.Debug
                     }
                 }
                 
-                // Detectar despawns en el cliente
+                // Detect client despawns
                 foreach (var kvp in lastFrameSpawnedObjects)
                 {
                     if (!spawnedObjects.ContainsKey(kvp.Key))
@@ -172,10 +198,30 @@ namespace EpochLegends.Utils.Debug
                 UnityEngine.Debug.Log($"[NetworkDiagnostics] {message}");
             }
 
-            if (logToFile && logWriter != null)
+            if (logToFile && fileLogEnabled && logWriter != null)
             {
-                logWriter.WriteLine($"[{System.DateTime.Now.ToString("HH:mm:ss.fff")}] {message}");
-                logWriter.Flush();
+                try
+                {
+                    logWriter.WriteLine($"[{System.DateTime.Now.ToString("HH:mm:ss.fff")}] {message}");
+                    logWriter.Flush();
+                }
+                catch (System.Exception e)
+                {
+                    // If we encounter an error, disable file logging to prevent further errors
+                    UnityEngine.Debug.LogWarning($"[NetworkDiagnostics] File logging error, disabling: {e.Message}");
+                    fileLogEnabled = false;
+                    
+                    try
+                    {
+                        logWriter.Close();
+                    }
+                    catch
+                    {
+                        // Ignore errors on close
+                    }
+                    
+                    logWriter = null;
+                }
             }
         }
 

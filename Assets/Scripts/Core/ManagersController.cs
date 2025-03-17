@@ -30,24 +30,25 @@ namespace EpochLegends.Core
         // Instancias de managers creadas
         private Dictionary<string, GameObject> instantiatedManagers = new Dictionary<string, GameObject>();
 
-        private void Awake()
-        {
-            // Implementación de singleton
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-            
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-            
-            if (debugEnabled)
-                Debug.Log("[ManagersController] Initialized and marked DontDestroyOnLoad");
-            
-            // Inicializar todos los managers necesarios
-            InitializeManagers();
-        }
+private void Awake()
+{
+    if (Instance != null && Instance != this)
+    {
+        Destroy(gameObject);
+        return;
+    }
+    
+    Instance = this;
+    
+    // Preserva todo el contenedor y sus hijos
+    DontDestroyOnLoad(gameObject);
+    
+    if (debugEnabled) // Usa el nombre correcto de tu variable de depuración
+        Debug.Log("[ManagersController] Initialized and marked DontDestroyOnLoad");
+    
+    // Inicializar todos los managers necesarios
+    InitializeManagers();
+}
         
         private void InitializeManagers()
         {

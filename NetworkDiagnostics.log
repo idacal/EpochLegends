@@ -1,0 +1,183 @@
+=== Network Diagnostics Started at 17-03-2025 17:45:54 ===
+[17:45:54.513] SERVER SPAWN: TeamManager, NetID: 1, SceneID: 23E6E149, AssetID: 2613641029
+[17:45:54.514] SERVER SPAWN: TeamAssignment, NetID: 2, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[17:45:54.514] SERVER SPAWN: GameManager, NetID: 3, SceneID: DBAA8B3E, AssetID: 2598542897
+[17:45:54.514] SERVER SPAWN: temp_player [connId=0], NetID: 4, SceneID: 0, AssetID: 1462839937
+[17:45:58.011] SERVER SPAWN: temp_player [connId=390218156], NetID: 5, SceneID: 0, AssetID: 1462839937
+[17:46:05.767] SERVER SCENE CHANGED: HeroSelection
+[17:46:06.060] SERVER SPAWN: HeroSelectionCanvas, NetID: 6, SceneID: 7442F4A3943C0B09, AssetID: 0
+[17:46:06.060] SERVER SPAWN: temp_player [connId=0], NetID: 8, SceneID: 0, AssetID: 1462839937
+[17:46:06.062] SERVER SPAWN: temp_player [connId=390218156], NetID: 7, SceneID: 0, AssetID: 1462839937
+[17:46:06.062] SERVER UNSPAWN: TeamAssignment, NetID: 2
+[17:46:06.062] SERVER UNSPAWN: temp_player [connId=0], NetID: 4
+[17:46:06.062] SERVER UNSPAWN: temp_player [connId=390218156], NetID: 5
+=== Network Diagnostics Stopped at 17-03-2025 17:46:24 ===
+=== Network Diagnostics Started at 17-03-2025 18:02:56 ===
+[18:02:56.436] SERVER SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:02:56.436] SERVER SPAWN: TeamManager, NetID: 2, SceneID: 23E6E149, AssetID: 2613641029
+[18:02:56.436] SERVER SPAWN: GameManager, NetID: 3, SceneID: DBAA8B3E, AssetID: 2598542897
+[18:02:56.437] SERVER SPAWN: temp_player [connId=0], NetID: 4, SceneID: 0, AssetID: 1462839937
+[18:03:00.934] SERVER SPAWN: temp_player [connId=390224004], NetID: 5, SceneID: 0, AssetID: 1462839937
+[18:03:06.831] SERVER SCENE CHANGED: HeroSelection
+[18:03:06.974] SERVER SPAWN: HeroSelectionCanvas, NetID: 6, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:03:06.974] SERVER SPAWN: temp_player [connId=0], NetID: 8, SceneID: 0, AssetID: 1462839937
+[18:03:06.974] SERVER SPAWN: temp_player [connId=390224004], NetID: 7, SceneID: 0, AssetID: 1462839937
+[18:03:06.974] SERVER UNSPAWN: TeamAssignment, NetID: 1
+[18:03:06.974] SERVER UNSPAWN: temp_player [connId=0], NetID: 4
+[18:03:06.974] SERVER UNSPAWN: temp_player [connId=390224004], NetID: 5
+=== Network Diagnostics Stopped at 17-03-2025 18:03:33 ===
+=== Network Diagnostics Started at 17-03-2025 18:13:47 ===
+=== Network Diagnostics Stopped at 17-03-2025 18:13:50 ===
+=== Network Diagnostics Started at 17-03-2025 18:15:22 ===
+[18:15:22.389] SERVER SPAWN: GameManager, NetID: 1, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:15:22.390] SERVER SPAWN: TeamAssignment, NetID: 2, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:15:22.390] SERVER SPAWN: TeamManager, NetID: 3, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:15:22.390] SERVER SPAWN: LobbyManager, NetID: 4, SceneID: 3B57411B17916B04, AssetID: 0
+[18:15:22.391] SERVER SPAWN: temp_player [connId=0], NetID: 5, SceneID: 0, AssetID: 1462839937
+=== Network Diagnostics Stopped at 17-03-2025 18:15:32 ===
+=== Network Diagnostics Started at 17-03-2025 18:15:43 ===
+[18:15:43.885] SERVER SPAWN: TeamManager, NetID: 1, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:15:43.886] SERVER SPAWN: TeamAssignment, NetID: 2, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:15:43.886] SERVER SPAWN: GameManager, NetID: 3, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:15:43.886] SERVER SPAWN: LobbyManager, NetID: 4, SceneID: 3B57411B17916B04, AssetID: 0
+[18:15:43.886] SERVER SPAWN: temp_player [connId=0], NetID: 5, SceneID: 0, AssetID: 1462839937
+[18:15:47.379] SERVER SPAWN: temp_player [connId=390225055], NetID: 6, SceneID: 0, AssetID: 1462839937
+[18:16:01.951] SERVER SCENE CHANGED: HeroSelection
+[18:16:02.436] SERVER SPAWN: temp_player [connId=390225055], NetID: 10, SceneID: 0, AssetID: 1462839937
+[18:16:02.436] SERVER SPAWN: temp_player [connId=0], NetID: 9, SceneID: 0, AssetID: 1462839937
+[18:16:02.436] SERVER SPAWN: HeroSelectionCanvas, NetID: 7, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:16:02.436] SERVER SPAWN: Managers, NetID: 8, SceneID: 759913C6, AssetID: 0
+[18:16:02.436] SERVER UNSPAWN: TeamManager, NetID: 1
+[18:16:02.437] SERVER UNSPAWN: TeamAssignment, NetID: 2
+[18:16:02.437] SERVER UNSPAWN: GameManager, NetID: 3
+[18:16:02.437] SERVER UNSPAWN: LobbyManager, NetID: 4
+[18:16:02.437] SERVER UNSPAWN: temp_player [connId=0], NetID: 5
+[18:16:02.437] SERVER UNSPAWN: temp_player [connId=390225055], NetID: 6
+=== Network Diagnostics Stopped at 17-03-2025 18:18:48 ===
+=== Network Diagnostics Started at 17-03-2025 18:19:55 ===
+[18:19:56.206] SERVER SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:19:56.207] SERVER SPAWN: TeamManager, NetID: 2, SceneID: 23E6E149, AssetID: 2613641029
+[18:19:56.207] SERVER SPAWN: GameManager, NetID: 3, SceneID: DBAA8B3E, AssetID: 2598542897
+[18:19:56.207] SERVER SPAWN: LobbyManager, NetID: 4, SceneID: 3B57411B17916B04, AssetID: 0
+[18:19:56.208] SERVER SPAWN: temp_player [connId=0], NetID: 5, SceneID: 0, AssetID: 1462839937
+[18:19:59.703] SERVER SPAWN: temp_player [connId=390222884], NetID: 6, SceneID: 0, AssetID: 1462839937
+[18:20:18.702] SERVER UNSPAWN: temp_player [connId=390222884], NetID: 6
+=== Network Diagnostics Stopped at 17-03-2025 18:20:19 ===
+=== Network Diagnostics Started at 17-03-2025 18:21:11 ===
+[18:21:11.445] SERVER SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:21:11.446] SERVER SPAWN: TeamManager, NetID: 2, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:21:11.446] SERVER SPAWN: GameManager, NetID: 3, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:21:11.446] SERVER SPAWN: LobbyManager, NetID: 4, SceneID: 3B57411B17916B04, AssetID: 0
+[18:21:11.446] SERVER SPAWN: temp_player [connId=0], NetID: 5, SceneID: 0, AssetID: 1462839937
+[18:21:14.942] SERVER SPAWN: temp_player [connId=390220796], NetID: 6, SceneID: 0, AssetID: 1462839937
+[18:21:30.085] SERVER SCENE CHANGED: HeroSelection
+[18:21:30.493] SERVER SPAWN: temp_player [connId=390220796], NetID: 10, SceneID: 0, AssetID: 1462839937
+[18:21:30.493] SERVER SPAWN: temp_player [connId=0], NetID: 9, SceneID: 0, AssetID: 1462839937
+[18:21:30.493] SERVER SPAWN: HeroSelectionCanvas, NetID: 7, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:21:30.493] SERVER SPAWN: Managers, NetID: 8, SceneID: 759913C6, AssetID: 0
+[18:21:30.494] SERVER UNSPAWN: TeamAssignment, NetID: 1
+[18:21:30.494] SERVER UNSPAWN: TeamManager, NetID: 2
+[18:21:30.494] SERVER UNSPAWN: GameManager, NetID: 3
+[18:21:30.494] SERVER UNSPAWN: LobbyManager, NetID: 4
+[18:21:30.494] SERVER UNSPAWN: temp_player [connId=0], NetID: 5
+[18:21:30.494] SERVER UNSPAWN: temp_player [connId=390220796], NetID: 6
+=== Network Diagnostics Stopped at 17-03-2025 18:22:43 ===
+=== Network Diagnostics Started at 17-03-2025 18:23:28 ===
+[18:23:28.654] SERVER SPAWN: GameManager, NetID: 1, SceneID: DBAA8B3E, AssetID: 2598542897
+[18:23:28.655] SERVER SPAWN: TeamManager, NetID: 2, SceneID: 23E6E149, AssetID: 2613641029
+[18:23:28.655] SERVER SPAWN: TeamAssignment, NetID: 3, SceneID: 6E483AD7, AssetID: 2920735973
+[18:23:28.656] SERVER SPAWN: LobbyManager, NetID: 4, SceneID: 3B57411B17916B04, AssetID: 0
+[18:23:28.656] SERVER SPAWN: temp_player [connId=0], NetID: 5, SceneID: 0, AssetID: 1462839937
+=== Network Diagnostics Stopped at 17-03-2025 18:23:43 ===
+=== Network Diagnostics Started at 17-03-2025 18:35:18 ===
+[18:35:18.422] SERVER SPAWN: TeamManager, NetID: 1, SceneID: 23E6E149, AssetID: 2613641029
+[18:35:18.423] SERVER SPAWN: TeamAssignment, NetID: 2, SceneID: 6E483AD7, AssetID: 2920735973
+[18:35:18.423] SERVER SPAWN: HeroSelectionManager, NetID: 3, SceneID: 6EB7EE0B, AssetID: 4181262340
+[18:35:18.424] SERVER SPAWN: HeroRegistry, NetID: 4, SceneID: D603BA67, AssetID: 1831850035
+[18:35:18.424] SERVER SPAWN: GameManager, NetID: 5, SceneID: DBAA8B3E, AssetID: 2598542897
+[18:35:18.424] SERVER SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[18:35:18.424] SERVER SPAWN: temp_player [connId=0], NetID: 7, SceneID: 0, AssetID: 1462839937
+[18:35:21.918] SERVER SPAWN: temp_player [connId=390231330], NetID: 8, SceneID: 0, AssetID: 1462839937
+[18:35:37.821] SERVER SCENE CHANGED: HeroSelection
+[18:35:37.969] SERVER SPAWN: HeroSelectionCanvas, NetID: 9, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:35:37.969] SERVER SPAWN: temp_player [connId=390231330], NetID: 11, SceneID: 0, AssetID: 1462839937
+[18:35:37.969] SERVER SPAWN: temp_player [connId=0], NetID: 10, SceneID: 0, AssetID: 1462839937
+[18:35:37.970] SERVER UNSPAWN: LobbyManager, NetID: 6
+[18:35:37.970] SERVER UNSPAWN: temp_player [connId=0], NetID: 7
+[18:35:37.970] SERVER UNSPAWN: temp_player [connId=390231330], NetID: 8
+[18:35:52.969] SERVER UNSPAWN: temp_player [connId=390231330], NetID: 11
+=== Network Diagnostics Stopped at 17-03-2025 18:35:57 ===
+=== Network Diagnostics Started at 17-03-2025 18:36:32 ===
+[18:36:32.386] SERVER SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:36:32.387] SERVER SPAWN: TeamManager, NetID: 2, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:36:32.387] SERVER SPAWN: HeroSelectionManager, NetID: 3, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[18:36:32.388] SERVER SPAWN: HeroRegistry, NetID: 4, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[18:36:32.388] SERVER SPAWN: GameManager, NetID: 5, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:36:32.388] SERVER SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[18:36:32.388] SERVER SPAWN: temp_player [connId=0], NetID: 7, SceneID: 0, AssetID: 1462839937
+[18:36:35.383] SERVER SPAWN: temp_player [connId=390228694], NetID: 8, SceneID: 0, AssetID: 1462839937
+[18:36:49.421] SERVER SCENE CHANGED: HeroSelection
+[18:36:49.927] SERVER SPAWN: temp_player [connId=390228694], NetID: 10, SceneID: 0, AssetID: 1462839937
+[18:36:49.927] SERVER SPAWN: HeroSelectionCanvas, NetID: 9, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:36:49.927] SERVER SPAWN: temp_player [connId=0], NetID: 11, SceneID: 0, AssetID: 1462839937
+[18:36:49.927] SERVER UNSPAWN: TeamAssignment, NetID: 1
+[18:36:49.927] SERVER UNSPAWN: TeamManager, NetID: 2
+[18:36:49.927] SERVER UNSPAWN: HeroSelectionManager, NetID: 3
+[18:36:49.927] SERVER UNSPAWN: HeroRegistry, NetID: 4
+[18:36:49.928] SERVER UNSPAWN: GameManager, NetID: 5
+[18:36:49.928] SERVER UNSPAWN: LobbyManager, NetID: 6
+[18:36:49.928] SERVER UNSPAWN: temp_player [connId=0], NetID: 7
+[18:36:49.928] SERVER UNSPAWN: temp_player [connId=390228694], NetID: 8
+=== Network Diagnostics Stopped at 17-03-2025 18:37:58 ===
+=== Network Diagnostics Started at 17-03-2025 18:39:55 ===
+[18:39:55.444] SERVER SPAWN: HeroSelectionManager, NetID: 1, SceneID: 6EB7EE0B, AssetID: 4181262340
+[18:39:55.445] SERVER SPAWN: GameManager, NetID: 2, SceneID: DBAA8B3E, AssetID: 2598542897
+[18:39:55.445] SERVER SPAWN: HeroRegistry, NetID: 3, SceneID: D603BA67, AssetID: 1831850035
+[18:39:55.445] SERVER SPAWN: TeamAssignment, NetID: 4, SceneID: 6E483AD7, AssetID: 2920735973
+[18:39:55.445] SERVER SPAWN: TeamManager, NetID: 5, SceneID: 23E6E149, AssetID: 2613641029
+[18:39:55.445] SERVER SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[18:39:55.445] SERVER SPAWN: temp_player [connId=0], NetID: 7, SceneID: 0, AssetID: 1462839937
+[18:39:59.440] SERVER SPAWN: temp_player [connId=390220443], NetID: 8, SceneID: 0, AssetID: 1462839937
+[18:40:26.208] SERVER SCENE CHANGED: HeroSelection
+[18:40:26.489] SERVER SPAWN: HeroSelectionCanvas, NetID: 9, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:40:26.489] SERVER SPAWN: temp_player [connId=0], NetID: 10, SceneID: 0, AssetID: 1462839937
+[18:40:26.489] SERVER SPAWN: temp_player [connId=390220443], NetID: 11, SceneID: 0, AssetID: 1462839937
+[18:40:26.490] SERVER UNSPAWN: LobbyManager, NetID: 6
+[18:40:26.490] SERVER UNSPAWN: temp_player [connId=0], NetID: 7
+[18:40:26.490] SERVER UNSPAWN: temp_player [connId=390220443], NetID: 8
+[18:40:35.990] SERVER UNSPAWN: temp_player [connId=390220443], NetID: 11
+[18:41:26.220] SERVER SCENE CHANGED: Gameplay
+[18:41:26.522] SERVER SPAWN: temp_player [connId=0], NetID: 12, SceneID: 0, AssetID: 1462839937
+[18:41:26.522] SERVER UNSPAWN: HeroSelectionCanvas, NetID: 9
+[18:41:26.523] SERVER UNSPAWN: temp_player [connId=0], NetID: 10
+=== Network Diagnostics Stopped at 17-03-2025 18:42:49 ===
+=== Network Diagnostics Started at 17-03-2025 18:43:32 ===
+[18:43:33.013] SERVER SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:43:33.014] SERVER SPAWN: HeroRegistry, NetID: 2, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[18:43:33.014] SERVER SPAWN: HeroSelectionManager, NetID: 3, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[18:43:33.014] SERVER SPAWN: TeamManager, NetID: 4, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:43:33.014] SERVER SPAWN: GameManager, NetID: 5, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:43:33.014] SERVER SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[18:43:33.014] SERVER SPAWN: temp_player [connId=0], NetID: 7, SceneID: 0, AssetID: 1462839937
+[18:43:36.510] SERVER SPAWN: temp_player [connId=390228962], NetID: 8, SceneID: 0, AssetID: 1462839937
+[18:43:42.208] SERVER SCENE CHANGED: HeroSelection
+[18:43:42.548] SERVER SPAWN: temp_player [connId=390228962], NetID: 11, SceneID: 0, AssetID: 1462839937
+[18:43:42.548] SERVER SPAWN: HeroSelectionCanvas, NetID: 9, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:43:42.548] SERVER SPAWN: temp_player [connId=0], NetID: 10, SceneID: 0, AssetID: 1462839937
+[18:43:42.548] SERVER UNSPAWN: TeamAssignment, NetID: 1
+[18:43:42.548] SERVER UNSPAWN: HeroRegistry, NetID: 2
+[18:43:42.548] SERVER UNSPAWN: HeroSelectionManager, NetID: 3
+[18:43:42.548] SERVER UNSPAWN: TeamManager, NetID: 4
+[18:43:42.549] SERVER UNSPAWN: GameManager, NetID: 5
+[18:43:42.549] SERVER UNSPAWN: LobbyManager, NetID: 6
+[18:43:42.549] SERVER UNSPAWN: temp_player [connId=0], NetID: 7
+[18:43:42.549] SERVER UNSPAWN: temp_player [connId=390228962], NetID: 8
+=== Network Diagnostics Stopped at 17-03-2025 18:52:57 ===
+=== Network Diagnostics Started at 17-03-2025 18:55:44 ===
+[18:55:44.372] SERVER SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:55:44.372] SERVER SPAWN: HeroRegistry, NetID: 2, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[18:55:44.372] SERVER SPAWN: GameManager, NetID: 3, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:55:44.373] SERVER SPAWN: HeroSelectionManager, NetID: 4, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[18:55:44.373] SERVER SPAWN: TeamManager, NetID: 5, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:55:44.373] SERVER SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[18:55:44.373] SERVER SPAWN: temp_player [connId=0], NetID: 7, SceneID: 0, AssetID: 1462839937

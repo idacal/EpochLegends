@@ -146,6 +146,7 @@ GameObject:
   - component: {fileID: 1190343628490187433}
   - component: {fileID: 7215524848461431636}
   - component: {fileID: -704225265311646333}
+  - component: {fileID: -3685630853455029877}
   m_Layer: 5
   m_Name: AbilityDisplay
   m_TagString: Untagged
@@ -230,6 +231,23 @@ MonoBehaviour:
   abilityNameText: {fileID: 9190429253678691004}
   abilityDescriptionText: {fileID: 6061331807430006018}
   abilityTypeText: {fileID: 4846446322741453701}
+--- !u!114 &-3685630853455029877
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2223304033356476857}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sceneId: 0
+  _assetId: 0
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!1 &3441656868257626107
 GameObject:
   m_ObjectHideFlags: 0

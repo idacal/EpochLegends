@@ -118,6 +118,34 @@ namespace EpochLegends.Core.Network.Manager
         {
             base.OnStartServer();
             
+            // Verificar prefabs registrados
+            Debug.Log($"Server starting with {spawnPrefabs.Count} registered prefabs:");
+            foreach (var prefab in spawnPrefabs)
+            {
+                NetworkIdentity identity = prefab?.GetComponent<NetworkIdentity>();
+                if (identity != null)
+                {
+                    Debug.Log($"- {prefab.name} (assetId: {identity.assetId})");
+                }
+                else
+                {
+                    Debug.LogError($"- ERROR: {prefab.name} does not have NetworkIdentity component!");
+                }
+            }
+            
+            // Buscar componente de diagnóstico de red
+            EpochLegends.Utils.Debug.NetworkDiagnostics diagnostics = 
+                FindObjectOfType<EpochLegends.Utils.Debug.NetworkDiagnostics>();
+                
+            if (diagnostics == null)
+            {
+                // Crear una instancia del diagnóstico si no existe
+                GameObject diagnosticsObj = new GameObject("NetworkDiagnostics");
+                diagnosticsObj.AddComponent<EpochLegends.Utils.Debug.NetworkDiagnostics>();
+                DontDestroyOnLoad(diagnosticsObj);
+                Debug.Log("Created NetworkDiagnostics component for monitoring");
+            }
+            
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Server started: {serverName}");
         }
@@ -125,6 +153,22 @@ namespace EpochLegends.Core.Network.Manager
         public override void OnStartClient()
         {
             base.OnStartClient();
+            
+            // Verificar prefabs registrados en el cliente
+            Debug.Log($"Client starting with {spawnPrefabs.Count} registered prefabs");
+            
+            // Buscar componente de diagnóstico de red
+            EpochLegends.Utils.Debug.NetworkDiagnostics diagnostics = 
+                FindObjectOfType<EpochLegends.Utils.Debug.NetworkDiagnostics>();
+                
+            if (diagnostics == null && !NetworkServer.active) // Solo crear en cliente puro
+            {
+                // Crear una instancia del diagnóstico si no existe
+                GameObject diagnosticsObj = new GameObject("NetworkDiagnostics");
+                diagnosticsObj.AddComponent<EpochLegends.Utils.Debug.NetworkDiagnostics>();
+                DontDestroyOnLoad(diagnosticsObj);
+                Debug.Log("Created NetworkDiagnostics component for monitoring");
+            }
             
             if (debugNetwork)
                 Debug.Log("[NetworkManager] Client started - registering message handlers");

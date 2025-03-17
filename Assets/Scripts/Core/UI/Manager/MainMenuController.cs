@@ -44,7 +44,7 @@ namespace EpochLegends.Core.UI.Menu
             
             if (networkManager == null)
             {
-                Debug.LogError("NetworkManager instance not found!");
+                Debug.LogWarning("NetworkManager instance not found! NetworkManager funcionality will be limited.");
             }
             
             // Find NetworkDiscovery if not assigned

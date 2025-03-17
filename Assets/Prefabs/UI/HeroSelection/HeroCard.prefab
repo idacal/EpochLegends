@@ -296,6 +296,7 @@ GameObject:
   - component: {fileID: 6084479503216906244}
   - component: {fileID: 3404758935188157192}
   - component: {fileID: 744105427450778895}
+  - component: {fileID: 5728728948790943455}
   m_Layer: 5
   m_Name: HeroCard
   m_TagString: Untagged
@@ -407,3 +408,23 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &5728728948790943455
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8246182465411544297}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 413eacbbc06366f42a7927fb49ddd1d9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  heroIconImage: {fileID: 4268200799728724122}
+  heroNameText: {fileID: 3412748505015421111}
+  backgroundImage: {fileID: 0}
+  stateIndicator: {fileID: 8104160575574150594}
+  button: {fileID: 0}
+  availableColor: {r: 1, g: 1, b: 1, a: 1}
+  selectedColor: {r: 0, g: 1, b: 0, a: 1}
+  unavailableColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}

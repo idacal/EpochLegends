@@ -12,16 +12,16 @@ namespace EpochLegends.UI.HeroSelection
     public class HeroSelectionUIController : NetworkBehaviour
     {
         [Header("UI References")]
-        [SerializeField] private TextMeshProUGUI timerText;
+        [SerializeField] private TMP_Text timerText;  // Soporta tanto Text como TextMeshProUGUI
         [SerializeField] private Transform heroGridContainer;
         [SerializeField] private GameObject heroCardPrefab;
         
         [Header("Hero Details")]
         [SerializeField] private GameObject heroDetailsPanel;
         [SerializeField] private Image heroImage;
-        [SerializeField] private TextMeshProUGUI heroNameText;
-        [SerializeField] private TextMeshProUGUI heroRoleText;
-        [SerializeField] private TextMeshProUGUI heroDescriptionText;
+        [SerializeField] private TMP_Text heroNameText;
+        [SerializeField] private TMP_Text heroRoleText;
+        [SerializeField] private TMP_Text heroDescriptionText;
         [SerializeField] private Transform abilitiesContainer;
         [SerializeField] private GameObject abilityDisplayPrefab;
         
@@ -32,7 +32,13 @@ namespace EpochLegends.UI.HeroSelection
         [Header("Selection Controls")]
         [SerializeField] private Button selectButton;
         [SerializeField] private Button readyButton;
-        [SerializeField] private TextMeshProUGUI readyButtonText;
+        [SerializeField] private TMP_Text readyButtonText;
+        
+        [Header("Audio")]
+        [SerializeField] private AudioSource audioSource;
+        [SerializeField] private AudioClip selectSound;
+        [SerializeField] private AudioClip readySound;
+        [SerializeField] private AudioClip timerTickSound;
         
         // References
         private HeroSelectionManager selectionManager;
@@ -43,6 +49,7 @@ namespace EpochLegends.UI.HeroSelection
         private Dictionary<uint, PlayerSelectionDisplay> playerSelections = new Dictionary<uint, PlayerSelectionDisplay>();
         private List<HeroCard> heroCards = new List<HeroCard>();
         private bool isReady = false;
+        private float lastSecond = 0;
         
         private void Awake()
         {
@@ -52,7 +59,7 @@ namespace EpochLegends.UI.HeroSelection
             
             if (selectionManager == null || heroRegistry == null)
             {
-                Debug.LogError("Required managers not found in scene!");
+                Debug.LogError("[HeroSelectionUIController] Required managers not found in scene!");
                 return;
             }
             
@@ -74,18 +81,21 @@ namespace EpochLegends.UI.HeroSelection
             
             // Load hero grid
             PopulateHeroGrid();
+            
+            // Initialize player selection displays
+            InitializePlayerSelections();
         }
         
         private void OnDestroy()
         {
-            // Unregister from events
+            // Unregister from events - these operations are safe even if events have no subscribers
             HeroSelectionManager.OnHeroSelected -= OnHeroSelected;
             HeroSelectionManager.OnSelectionComplete -= OnSelectionComplete;
         }
         
         private void Update()
         {
-            // Update timer
+            // Update timer display
             UpdateTimer();
         }
         
@@ -93,9 +103,6 @@ namespace EpochLegends.UI.HeroSelection
         
         private void PopulateHeroGrid()
         {
-            if (heroRegistry == null || heroCardPrefab == null || heroGridContainer == null)
-                return;
-                
             // Clear existing hero cards
             foreach (Transform child in heroGridContainer)
             {
@@ -119,13 +126,95 @@ namespace EpochLegends.UI.HeroSelection
                     heroCards.Add(card);
                 }
             }
+            
+            Debug.Log($"[HeroSelectionUIController] Populated {heroes.Count} hero cards");
         }
+        
+        private void InitializePlayerSelections()
+        {
+            // Clear existing selections
+            ClearPlayerSelections();
+            
+            // In a real implementation, this would get all connected players
+            // For this demo, we'll create dummy entries for testing
+            
+            // Check if we're in networked mode or test mode
+            if (NetworkClient.isConnected)
+            {
+                // In networked mode, wait for player data to sync
+                // The entries will be created/updated when player data changes
+                UpdatePlayerSelections();
+            }
+            else
+            {
+                // In test mode, create some dummy entries
+                CreateDummyPlayerSelections();
+            }
+        }
+        
+        private void ClearPlayerSelections()
+        {
+            foreach (var display in playerSelections.Values)
+            {
+                if (display != null)
+                {
+                    Destroy(display.gameObject);
+                }
+            }
+            playerSelections.Clear();
+            
+            // Clear team panels
+            foreach (Transform teamPanel in teamPanels)
+            {
+                foreach (Transform child in teamPanel)
+                {
+                    // Skip static UI elements like headers
+                    if (!child.CompareTag("DontDestroy"))
+                    {
+                        Destroy(child.gameObject);
+                    }
+                }
+            }
+        }
+        
+        // For testing in non-networked mode
+        private void CreateDummyPlayerSelections()
+        {
+            // Team 1 players (typically 5 players per team in MOBAs)
+            for (int i = 0; i < 5; i++)
+            {
+                CreatePlayerSelectionDisplay(
+                    (uint)(100 + i),  // Dummy netId
+                    $"Player {i+1}",
+                    1,  // Team 1
+                    i == 0 ? selectedHero?.HeroId : "",
+                    i == 0  // First player is local
+                );
+            }
+            
+            // Team 2 players
+            for (int i = 0; i < 5; i++)
+            {
+                CreatePlayerSelectionDisplay(
+                    (uint)(200 + i),  // Dummy netId
+                    $"Player {i+6}",
+                    2,  // Team 2
+                    "",  // No hero selected
+                    false  // Not local player
+                );
+            }
+        }
+        
+        #endregion
+        
+        #region Hero Details
         
         private void ShowHeroDetails(HeroDefinition hero)
         {
             if (hero == null)
             {
                 heroDetailsPanel.SetActive(false);
+                selectedHero = null;
                 return;
             }
             
@@ -152,7 +241,7 @@ namespace EpochLegends.UI.HeroSelection
             }
             
             // Populate abilities
-            if (hero.Abilities != null && abilityDisplayPrefab != null)
+            if (hero.Abilities != null)
             {
                 foreach (var ability in hero.Abilities)
                 {
@@ -164,6 +253,8 @@ namespace EpochLegends.UI.HeroSelection
                         abilityDisplay.Initialize(ability);
                     }
                 }
+                
+                Debug.Log($"[HeroSelectionUIController] Displayed {hero.Abilities.Count} abilities for {hero.DisplayName}");
             }
             
             // Update select button
@@ -171,17 +262,18 @@ namespace EpochLegends.UI.HeroSelection
             bool isLocalHeroSelection = IsLocalPlayerSelection(hero.HeroId);
             
             selectButton.interactable = !isHeroSelected || isLocalHeroSelection;
-            selectButton.GetComponentInChildren<TextMeshProUGUI>().text = 
-                isLocalHeroSelection ? "Selected" : (isHeroSelected ? "Not Available" : "Select Hero");
-        }
-        
-        private void UpdateTimer()
-        {
-            if (timerText != null && selectionManager != null)
-            {
-                float remainingTime = selectionManager.GetRemainingTime();
-                timerText.text = $"Time Remaining: {Mathf.CeilToInt(remainingTime)}s";
-            }
+            // Obtener el texto del botón - funciona con Text o TMP_Text
+            var buttonTextComponent = selectButton.GetComponentInChildren<TMP_Text>() as Component;
+            if (buttonTextComponent == null)
+                buttonTextComponent = selectButton.GetComponentInChildren<Text>();
+                
+            // Establecer el texto según el estado
+            string buttonText = isLocalHeroSelection ? "Seleccionado" : (isHeroSelected ? "No Disponible" : "Seleccionar Héroe");
+            
+            if (buttonTextComponent is TMP_Text)
+                ((TMP_Text)buttonTextComponent).text = buttonText;
+            else if (buttonTextComponent is Text)
+                ((Text)buttonTextComponent).text = buttonText;
         }
         
         #endregion
@@ -193,66 +285,82 @@ namespace EpochLegends.UI.HeroSelection
             if (teamPanels == null || teamPanels.Length < 2 || selectionManager == null)
                 return;
                 
-            // For this demo, we're just showing two teams with player selections
             // In a real implementation, you'd get all connected players and their selections
-                
-            // Clear current displays
-            foreach (var display in playerSelections.Values)
+            // For now, we're using a simplified approach
+            
+            // This would iterate through all connected players
+            // For networked mode, you'd get this from GameManager
+            var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
+            
+            if (connectedPlayers != null && connectedPlayers.Count > 0)
             {
-                if (display != null)
+                // Clear existing player entries
+                ClearPlayerSelections();
+                
+                foreach (var playerEntry in connectedPlayers)
                 {
-                    Destroy(display.gameObject);
+                    uint netId = playerEntry.Key;
+                    var playerInfo = playerEntry.Value;
+                    
+                    // Get player name - could get from identity
+                    string playerName = "Player " + netId;
+                    
+                    // Determine if local player
+                    bool isLocalPlayer = (NetworkClient.localPlayer != null && 
+                                          NetworkClient.localPlayer.netId == netId);
+                    
+                    // Get selected hero if any
+                    HeroDefinition selectedHero = null;
+                    if (!string.IsNullOrEmpty(playerInfo.SelectedHeroId))
+                    {
+                        selectedHero = heroRegistry.GetHeroById(playerInfo.SelectedHeroId);
+                    }
+                    
+                    // Create/update player entry
+                    CreatePlayerSelectionDisplay(
+                        netId,
+                        playerName,
+                        playerInfo.TeamId,
+                        playerInfo.SelectedHeroId,
+                        isLocalPlayer
+                    );
+                    
+                    // Update ready status
+                    if (playerSelections.TryGetValue(netId, out PlayerSelectionDisplay display))
+                    {
+                        display.SetReadyStatus(playerInfo.IsReady);
+                        
+                        // Update local ready state if this is local player
+                        if (isLocalPlayer)
+                        {
+                            isReady = playerInfo.IsReady;
+                            UpdateReadyButtonText();
+                        }
+                    }
                 }
             }
-            playerSelections.Clear();
-            
-            // This would iterate through all connected players in a real implementation
-            // For now we'll use a simplified approach with dummy data
-            CreateDummyPlayerSelections();
-        }
-        
-        // This is just for demonstration - in a real implementation 
-        // you'd get actual player data from the network
-        private void CreateDummyPlayerSelections()
-        {
-            // Team 1 players
-            for (int i = 0; i < 3; i++)
+            else
             {
-                CreatePlayerSelectionDisplay(
-                    (uint)(100 + i),  // Dummy netId
-                    $"Player {i+1}",
-                    1,  // Team 1
-                    i == 0 ? selectedHero?.HeroId : "",
-                    i == 0  // First player is local
-                );
-            }
-            
-            // Team 2 players
-            for (int i = 0; i < 3; i++)
-            {
-                CreatePlayerSelectionDisplay(
-                    (uint)(200 + i),  // Dummy netId
-                    $"Player {i+4}",
-                    2,  // Team 2
-                    "",  // No hero selected
-                    false  // Not local player
-                );
+                // Fallback to dummy data for testing
+                CreateDummyPlayerSelections();
             }
         }
         
         private void CreatePlayerSelectionDisplay(uint netId, string playerName, int teamId, string heroId, bool isLocalPlayer)
         {
-            if (teamPanels == null || teamId < 1 || teamId > teamPanels.Length)
-                return;
-                
-            // Get parent panel (0-based index)
-            Transform parentPanel = teamPanels[teamId - 1];
+            // Validate team ID (1-based in our system)
+            int teamIndex = teamId - 1;
+            if (teamIndex < 0 || teamIndex >= teamPanels.Length)
+                teamIndex = 0;
+
+            Transform parentPanel = teamPanels[teamIndex];
             
             GameObject displayObj = Instantiate(playerSelectionPrefab, parentPanel);
             PlayerSelectionDisplay display = displayObj.GetComponent<PlayerSelectionDisplay>();
             
             if (display != null)
             {
+                // Get hero definition if hero ID is provided
                 HeroDefinition hero = null;
                 if (!string.IsNullOrEmpty(heroId))
                 {
@@ -260,6 +368,7 @@ namespace EpochLegends.UI.HeroSelection
                 }
                 
                 display.Initialize(playerName, isLocalPlayer, hero);
+                display.SetPlayerNetId(netId);
                 playerSelections[netId] = display;
             }
         }
@@ -267,7 +376,7 @@ namespace EpochLegends.UI.HeroSelection
         private void UpdateLocalPlayerSelectionUI()
         {
             // Update ready button text
-            readyButtonText.text = isReady ? "Not Ready" : "Ready";
+            UpdateReadyButtonText();
             
             // Update hero grid to show selected/unavailable heroes
             foreach (var card in heroCards)
@@ -289,13 +398,74 @@ namespace EpochLegends.UI.HeroSelection
             }
         }
         
+        private void UpdateReadyButtonText()
+        {
+            if (readyButtonText != null)
+            {
+                readyButtonText.text = isReady ? "NO LISTO" : "LISTO";
+            }
+        }
+        
         private bool IsLocalPlayerSelection(string heroId)
         {
-            // In a real implementation, you'd check if the local player has selected this hero
-            // For now, we'll use a simplified approach
-            uint localPlayerNetId = 100; // Dummy ID from our example above
+            // Check if the local player has selected this hero
+            if (NetworkClient.localPlayer != null)
+            {
+                uint localPlayerNetId = NetworkClient.localPlayer.netId;
+                return selectionManager.GetSelectedHero(localPlayerNetId) == heroId;
+            }
             
-            return selectionManager.GetSelectedHero(localPlayerNetId) == heroId;
+            // For test mode, just use player 1
+            return selectionManager.GetSelectedHero(100) == heroId;
+        }
+        
+        #endregion
+        
+        #region Timer & Game Flow
+        
+        private void UpdateTimer()
+        {
+            if (timerText != null && selectionManager != null)
+            {
+                float remainingTime = selectionManager.GetRemainingTime();
+                timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
+                
+                // Play tick sound on each second change when time is low
+                int currentSecond = Mathf.CeilToInt(remainingTime);
+                if (currentSecond != lastSecond && currentSecond <= 10 && currentSecond > 0)
+                {
+                    PlaySound(timerTickSound);
+                    
+                    // Make timer text red when time is low
+                    if (currentSecond <= 5)
+                    {
+                        timerText.color = Color.red;
+                    }
+                }
+                lastSecond = currentSecond;
+            }
+        }
+        
+        private bool CheckAllPlayersReady()
+        {
+            if (selectionManager == null) return false;
+            
+            // Check if all players are ready
+            var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
+            
+            if (connectedPlayers != null && connectedPlayers.Count > 0)
+            {
+                foreach (var player in connectedPlayers.Values)
+                {
+                    if (!player.IsReady)
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            
+            return false;
         }
         
         #endregion
@@ -305,9 +475,10 @@ namespace EpochLegends.UI.HeroSelection
         private void OnHeroCardClicked(HeroDefinition hero)
         {
             ShowHeroDetails(hero);
+            PlaySound(selectSound);
         }
         
-        private void OnSelectButtonClicked()
+        public void OnSelectButtonClicked()
         {
             if (selectedHero == null || selectionManager == null) return;
             
@@ -317,11 +488,26 @@ namespace EpochLegends.UI.HeroSelection
             // Update UI
             UpdateLocalPlayerSelectionUI();
             UpdatePlayerSelections();
+            
+            // Play selection sound
+            PlaySound(selectSound);
         }
         
-        private void OnReadyButtonClicked()
+        public void OnReadyButtonClicked()
         {
             if (selectionManager == null) return;
+            
+            // Check if a hero is selected
+            uint localPlayerNetId = NetworkClient.localPlayer?.netId ?? 100; // Use 100 for testing
+            string selectedHeroId = selectionManager.GetSelectedHero(localPlayerNetId);
+            
+            if (string.IsNullOrEmpty(selectedHeroId))
+            {
+                // Cannot ready without selecting a hero
+                // Show error message or feedback
+                Debug.Log("Cannot ready up without selecting a hero first");
+                return;
+            }
             
             // Toggle ready status
             isReady = !isReady;
@@ -331,6 +517,10 @@ namespace EpochLegends.UI.HeroSelection
             
             // Update UI
             UpdateLocalPlayerSelectionUI();
+            UpdatePlayerSelections();
+            
+            // Play ready sound
+            PlaySound(readySound);
         }
         
         private void OnHeroSelected(uint playerNetId, string heroId)
@@ -348,190 +538,17 @@ namespace EpochLegends.UI.HeroSelection
         }
         
         #endregion
+        
+        #region Utility Methods
+        
+        private void PlaySound(AudioClip clip)
+        {
+            if (audioSource != null && clip != null)
+            {
+                audioSource.PlayOneShot(clip);
+            }
+        }
+        
+        #endregion
     }
-    
-    #region Helper Classes
-    
-    // Enum to represent the state of a hero card
-    public enum HeroCardState
-    {
-        Available,
-        Selected,
-        Unavailable
-    }
-    
-    // Component for individual hero cards in the grid
-    public class HeroCard : MonoBehaviour
-    {
-        [SerializeField] private Image heroIconImage;
-        [SerializeField] private TextMeshProUGUI heroNameText;
-        [SerializeField] private Image backgroundImage;
-        [SerializeField] private Button button;
-        
-        [SerializeField] private Color availableColor = Color.white;
-        [SerializeField] private Color selectedColor = Color.green;
-        [SerializeField] private Color unavailableColor = Color.gray;
-        
-        private HeroDefinition heroDefinition;
-        private HeroCardState currentState = HeroCardState.Available;
-        
-        // Event for when card is clicked
-        public delegate void HeroCardClickHandler(HeroDefinition hero);
-        public event HeroCardClickHandler OnClicked;
-        
-        public string HeroId => heroDefinition?.HeroId;
-        
-        private void Awake()
-        {
-            // Set up button click handler
-            if (button != null)
-            {
-                button.onClick.AddListener(OnCardClicked);
-            }
-        }
-        
-        public void Initialize(HeroDefinition hero)
-        {
-            heroDefinition = hero;
-            
-            // Set icon and name
-            if (heroIconImage != null && hero.HeroIcon != null)
-            {
-                heroIconImage.sprite = hero.HeroIcon;
-            }
-            
-            if (heroNameText != null)
-            {
-                heroNameText.text = hero.DisplayName;
-            }
-            
-            // Default to available state
-            SetState(HeroCardState.Available);
-        }
-        
-        public void SetState(HeroCardState state)
-        {
-            currentState = state;
-            
-            // Update visual state
-            if (backgroundImage != null)
-            {
-                switch (state)
-                {
-                    case HeroCardState.Available:
-                        backgroundImage.color = availableColor;
-                        button.interactable = true;
-                        break;
-                    case HeroCardState.Selected:
-                        backgroundImage.color = selectedColor;
-                        button.interactable = true;
-                        break;
-                    case HeroCardState.Unavailable:
-                        backgroundImage.color = unavailableColor;
-                        button.interactable = false;
-                        break;
-                }
-            }
-        }
-        
-        private void OnCardClicked()
-        {
-            OnClicked?.Invoke(heroDefinition);
-        }
-    }
-    
-    // Component for displaying abilities in the hero details panel
-    public class AbilityDisplay : MonoBehaviour
-    {
-        [SerializeField] private Image abilityIconImage;
-        [SerializeField] private TextMeshProUGUI abilityNameText;
-        [SerializeField] private TextMeshProUGUI abilityDescriptionText;
-        
-        public void Initialize(EpochLegends.Core.Ability.AbilityDefinition ability)
-        {
-            if (ability == null) return;
-            
-            // Set icon
-            if (abilityIconImage != null && ability.AbilityIcon != null)
-            {
-                abilityIconImage.sprite = ability.AbilityIcon;
-            }
-            
-            // Set name and description
-            if (abilityNameText != null)
-            {
-                abilityNameText.text = ability.DisplayName;
-            }
-            
-            if (abilityDescriptionText != null)
-            {
-                abilityDescriptionText.text = ability.Description;
-            }
-        }
-    }
-    
-    // Component for player selection display in team panels
-    public class PlayerSelectionDisplay : MonoBehaviour
-    {
-        [SerializeField] private TextMeshProUGUI playerNameText;
-        [SerializeField] private Image heroIconImage;
-        [SerializeField] private TextMeshProUGUI heroNameText;
-        [SerializeField] private GameObject localPlayerIndicator;
-        [SerializeField] private GameObject noSelectionIndicator;
-        
-        public void Initialize(string playerName, bool isLocalPlayer, HeroDefinition selectedHero)
-        {
-            // Set player name
-            if (playerNameText != null)
-            {
-                playerNameText.text = playerName;
-            }
-            
-            // Show/hide local player indicator
-            if (localPlayerIndicator != null)
-            {
-                localPlayerIndicator.SetActive(isLocalPlayer);
-            }
-            
-            // Set hero info if selected
-            if (selectedHero != null)
-            {
-                if (heroIconImage != null && selectedHero.HeroIcon != null)
-                {
-                    heroIconImage.sprite = selectedHero.HeroIcon;
-                    heroIconImage.gameObject.SetActive(true);
-                }
-                
-                if (heroNameText != null)
-                {
-                    heroNameText.text = selectedHero.DisplayName;
-                }
-                
-                if (noSelectionIndicator != null)
-                {
-                    noSelectionIndicator.SetActive(false);
-                }
-            }
-            else
-            {
-                // No hero selected yet
-                if (heroIconImage != null)
-                {
-                    heroIconImage.gameObject.SetActive(false);
-                }
-                
-                if (heroNameText != null)
-                {
-                    heroNameText.text = "";
-                }
-                
-                if (noSelectionIndicator != null)
-                {
-                    noSelectionIndicator.SetActive(true);
-                }
-            }
-        }
-    }
-    
-    #endregion
 }

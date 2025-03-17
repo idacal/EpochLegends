@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using EpochLegends.Core.Hero;
+using System;
 
 namespace EpochLegends.UI.HeroSelection
 {
@@ -15,62 +17,71 @@ namespace EpochLegends.UI.HeroSelection
     {
         [Header("UI References")]
         [SerializeField] private Image heroIconImage;
-        [SerializeField] private Text heroNameText;
+        [SerializeField] private TextMeshProUGUI heroNameText;
         [SerializeField] private Image backgroundImage;
-        [SerializeField] private GameObject selectionIndicator;
+        [SerializeField] private Image stateIndicator;
         [SerializeField] private Button button;
-
+        
         [Header("State Colors")]
         [SerializeField] private Color availableColor = Color.white;
         [SerializeField] private Color selectedColor = Color.green;
         [SerializeField] private Color unavailableColor = Color.gray;
-
+        
         private HeroDefinition heroDefinition;
         private HeroCardState currentState = HeroCardState.Available;
-
+        
         // Event for when card is clicked
         public delegate void HeroCardClickHandler(HeroDefinition hero);
         public event HeroCardClickHandler OnClicked;
-
+        
         public string HeroId => heroDefinition?.HeroId;
-
+        
         private void Awake()
         {
             // Set up button click handler
             if (button == null)
                 button = GetComponent<Button>();
-
+                
             if (button != null)
                 button.onClick.AddListener(OnCardClicked);
-
-            // Hide selection indicator initially
-            if (selectionIndicator != null)
-                selectionIndicator.SetActive(false);
+                
+            // Find components if not assigned
+            if (heroIconImage == null)
+                heroIconImage = transform.Find("HeroIcon")?.GetComponent<Image>();
+                
+            if (heroNameText == null)
+                heroNameText = transform.Find("HeroNameText")?.GetComponent<TextMeshProUGUI>();
+                
+            if (backgroundImage == null)
+                backgroundImage = GetComponent<Image>();
+                
+            if (stateIndicator == null)
+                stateIndicator = transform.Find("StateIndicator")?.GetComponent<Image>();
         }
-
+        
         public void Initialize(HeroDefinition hero)
         {
             heroDefinition = hero;
-
+            
             // Set icon and name
             if (heroIconImage != null && hero.HeroIcon != null)
             {
                 heroIconImage.sprite = hero.HeroIcon;
             }
-
+            
             if (heroNameText != null)
             {
                 heroNameText.text = hero.DisplayName;
             }
-
+            
             // Default to available state
             SetState(HeroCardState.Available);
         }
-
+        
         public void SetState(HeroCardState state)
         {
             currentState = state;
-
+            
             // Update visual state
             if (backgroundImage != null)
             {
@@ -90,30 +101,39 @@ namespace EpochLegends.UI.HeroSelection
                         break;
                 }
             }
-
-            // Show/hide selection indicator
-            if (selectionIndicator != null)
+            
+            // Update state indicator if present
+            if (stateIndicator != null)
             {
-                selectionIndicator.SetActive(state == HeroCardState.Selected);
+                stateIndicator.gameObject.SetActive(state != HeroCardState.Available);
+                
+                switch (state)
+                {
+                    case HeroCardState.Selected:
+                        stateIndicator.color = selectedColor;
+                        break;
+                    case HeroCardState.Unavailable:
+                        stateIndicator.color = unavailableColor;
+                        break;
+                }
             }
         }
-
+        
         private void OnCardClicked()
         {
-            // Notify listeners that this card was clicked
-            OnClicked?.Invoke(heroDefinition);
-
-            // Play click sound effect
+            // Play click sound
             PlayClickSound();
+            
+            // Invoke click event
+            OnClicked?.Invoke(heroDefinition);
         }
-
+        
         private void PlayClickSound()
         {
-            // You can implement sound playing logic here or through a sound manager
-            // For example:
-            // AudioManager.Instance.PlaySound("ButtonClick");
+            // You can implement sound playing here if you have an audio manager
+            // For example: AudioManager.Instance.PlaySound("ButtonClick");
         }
-
+        
         public HeroDefinition GetHeroDefinition()
         {
             return heroDefinition;

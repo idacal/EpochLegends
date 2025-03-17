@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using EpochLegends.Core.Ability;
 
 namespace EpochLegends.UI.HeroSelection
@@ -8,80 +9,85 @@ namespace EpochLegends.UI.HeroSelection
     {
         [Header("UI References")]
         [SerializeField] private Image abilityIconImage;
-        [SerializeField] private Text abilityNameText;
-        [SerializeField] private Text abilityDescriptionText;
-        [SerializeField] private Text abilityTypeText;
+        [SerializeField] private TextMeshProUGUI abilityNameText;
+        [SerializeField] private TextMeshProUGUI abilityDescriptionText;
+        [SerializeField] private TextMeshProUGUI abilityTypeText;
         
-        [Header("Type Colors")]
-        [SerializeField] private Color passiveColor = new Color(0.5f, 0.5f, 1f);
-        [SerializeField] private Color activeColor = new Color(0.2f, 0.8f, 0.2f);
-        [SerializeField] private Color ultimateColor = new Color(1f, 0.6f, 0.1f);
-
         private AbilityDefinition abilityDefinition;
-
+        
+        private void Awake()
+        {
+            // Find components if not assigned
+            if (abilityIconImage == null)
+                abilityIconImage = transform.Find("AbilityIcon")?.GetComponent<Image>();
+                
+            if (abilityNameText == null)
+                abilityNameText = transform.Find("AbilityNameText")?.GetComponent<TextMeshProUGUI>();
+                
+            if (abilityDescriptionText == null)
+                abilityDescriptionText = transform.Find("AbilityDescriptionText")?.GetComponent<TextMeshProUGUI>();
+                
+            if (abilityTypeText == null)
+                abilityTypeText = transform.Find("AbilityTypeText")?.GetComponent<TextMeshProUGUI>();
+        }
+        
         public void Initialize(AbilityDefinition ability)
         {
             abilityDefinition = ability;
-
+            
             // Set icon
             if (abilityIconImage != null && ability.AbilityIcon != null)
             {
                 abilityIconImage.sprite = ability.AbilityIcon;
+                abilityIconImage.preserveAspect = true;
             }
-
+            
             // Set name and description
             if (abilityNameText != null)
             {
                 abilityNameText.text = ability.DisplayName;
             }
-
+            
             if (abilityDescriptionText != null)
             {
                 abilityDescriptionText.text = ability.Description;
             }
-
-            // Set ability type and color
+            
+            // Set ability type if available
             if (abilityTypeText != null)
             {
                 abilityTypeText.text = ability.AbilityType.ToString();
                 
                 // Set color based on ability type
-                switch(ability.AbilityType)
+                switch (ability.AbilityType)
                 {
                     case AbilityType.Passive:
-                        abilityTypeText.color = passiveColor;
+                        abilityTypeText.color = new Color(0.2f, 0.6f, 0.2f); // Green
                         break;
                     case AbilityType.Active:
-                        abilityTypeText.color = activeColor;
+                        abilityTypeText.color = new Color(0.2f, 0.4f, 0.8f); // Blue
                         break;
                     case AbilityType.Ultimate:
-                        abilityTypeText.color = ultimateColor;
+                        abilityTypeText.color = new Color(0.8f, 0.6f, 0.2f); // Gold
+                        break;
+                    default:
+                        abilityTypeText.color = Color.white;
                         break;
                 }
             }
-
-            // Optional: Show additional info like cooldown, mana cost, etc.
-            UpdateAdditionalInfo();
         }
-
-        private void UpdateAdditionalInfo()
+        
+        // Optional: Add methods for interactivity if needed
+        public void OnPointerEnter()
         {
-            // You could add additional text elements showing cooldown, mana cost, etc.
-            // For example:
-            // cooldownText.text = $"Cooldown: {abilityDefinition.Cooldown}s";
-            // manaCostText.text = $"Mana: {abilityDefinition.ManaCost}";
+            // Handle hover effect
+            transform.localScale = new Vector3(1.05f, 1.05f, 1.05f);
         }
-
-        // Optional tooltips or expanded info
-        public void ShowDetailedTooltip()
+        
+        public void OnPointerExit()
         {
-            // Implementation for showing more detailed tooltip on hover/click
-            // This could include scaling effects and detailed text
-        }
-
-        public void HideDetailedTooltip()
-        {
-            // Hide detailed tooltip
+            // Reset hover effect
+            transform.localScale = Vector3.one;
         }
     }
 }

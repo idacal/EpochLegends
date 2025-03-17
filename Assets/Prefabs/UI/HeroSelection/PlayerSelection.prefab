@@ -430,6 +430,7 @@ GameObject:
   - component: {fileID: 3462803688540870018}
   - component: {fileID: 9154781694869305206}
   - component: {fileID: 4931059723242860987}
+  - component: {fileID: -3317232770998857199}
   m_Layer: 5
   m_Name: PlayerSelection
   m_TagString: Untagged
@@ -524,3 +525,25 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &-3317232770998857199
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7347784793268537006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc667f9239d58eb4ab728d1c8cb0438d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerNameText: {fileID: 3660342697199252010}
+  heroIconImage: {fileID: 3029978686146024778}
+  heroNameText: {fileID: 1283412599970603490}
+  readyIndicator: {fileID: 199748043957941294}
+  localPlayerIndicator: {fileID: 0}
+  noSelectionIndicator: {fileID: 0}
+  selectedColor: {r: 1, g: 1, b: 1, a: 1}
+  notSelectedColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  readyColor: {r: 0, g: 1, b: 0, a: 1}
+  notReadyColor: {r: 1, g: 0, b: 0, a: 1}

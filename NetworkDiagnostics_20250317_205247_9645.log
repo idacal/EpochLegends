@@ -1,0 +1,27 @@
+=== Network Diagnostics Started at 17-03-2025 20:52:47 ===
+Active Scene: MainMenu
+Network Mode: Client
+[20:52:47.430] NetworkDiagnostics initialized at 17-03-2025 20:52:47
+[20:52:47.543] CLIENT SCENE CHANGED: Lobby
+[20:52:47.998] CLIENT SPAWN: TeamManager, NetID: 1, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[20:52:47.998] CLIENT SPAWN: GameManager, NetID: 2, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[20:52:47.998] CLIENT SPAWN: HeroSelectionManager, NetID: 3, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[20:52:47.999] CLIENT SPAWN: TeamAssignment, NetID: 4, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[20:52:47.999] CLIENT SPAWN: HeroRegistry, NetID: 5, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[20:52:48.000] CLIENT SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[20:52:48.000] CLIENT SPAWN: temp_player(Clone), NetID: 7, SceneID: 0, AssetID: 1462839937
+[20:52:48.001] CLIENT SPAWN: temp_player(Clone), NetID: 8, SceneID: 0, AssetID: 1462839937
+[20:52:56.133] CLIENT SCENE CHANGED: HeroSelection
+[20:52:57.196] === NETWORK PREFAB DIAGNOSTICS ===
+Network Manager: Network Manager
+Registered Spawn Prefabs: 0
+
+Registered Prefabs:
+
+Current Spawned Objects:
+
+Statistics:
+- Total Spawns Detected: 0
+- Failed Spawns: 0
+
+=== Network Diagnostics Stopped at 17-03-2025 21:10:46 ===

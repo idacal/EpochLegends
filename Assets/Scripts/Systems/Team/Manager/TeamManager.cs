@@ -52,7 +52,8 @@ namespace EpochLegends.Systems.Team.Manager
             }
             
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            // ELIMINADO: DontDestroyOnLoad(gameObject);
+            // El ManagersController se encargará de preservar este objeto
             
             // Initialize team dictionaries
             InitializeTeamDictionaries();
@@ -63,6 +64,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         private void Update()
         {
+            if(!isActiveAndEnabled) return;
+            
             // Periodic check for changes
             if (Time.time - lastUpdateTime >= UPDATE_INTERVAL)
             {
@@ -118,6 +121,8 @@ namespace EpochLegends.Systems.Team.Manager
         // Update client-side dictionaries based on syncvar data
         private void UpdateLocalDictionaries()
         {
+            if(!isActiveAndEnabled) return;
+            
             // Clear and rebuild dictionaries
             foreach (var config in teamConfigs)
             {
@@ -158,6 +163,8 @@ namespace EpochLegends.Systems.Team.Manager
         // Helper method to refresh team UI
         private void RefreshTeamUI()
         {
+            if(!isActiveAndEnabled) return;
+            
             // Find LobbyController instances and refresh them
             var lobbyController = FindObjectOfType<EpochLegends.UI.Lobby.LobbyController>();
             if (lobbyController != null)
@@ -182,6 +189,8 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public int AssignPlayerToTeam(NetworkConnection player)
         {
+            if(!isActiveAndEnabled) return -1;
+            
             if (player == null || player.identity == null) return -1;
             
             uint netId = player.identity.netId;
@@ -213,6 +222,8 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public bool RequestTeamChange(NetworkConnection player, int newTeamId)
         {
+            if(!isActiveAndEnabled) return false;
+            
             if (player == null || player.identity == null) return false;
             uint netId = player.identity.netId;
             
@@ -255,6 +266,8 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         private void AssignToTeam(NetworkConnection player, int teamId)
         {
+            if(!isActiveAndEnabled) return;
+            
             if (player == null || player.identity == null) return;
             uint netId = player.identity.netId;
             connectionToNetId[player] = netId;
@@ -281,18 +294,24 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         private void ForceUIRefresh()
         {
+            if(!isActiveAndEnabled) return;
+            
             RpcForceUIRefresh();
         }
         
         [ClientRpc]
         private void RpcForceUIRefresh()
         {
+            if(!isActiveAndEnabled) return;
+            
             RefreshTeamUI();
         }
         
         [TargetRpc]
         private void TargetNotifyTeamAssignment(NetworkConnection target, int teamId)
         {
+            if(!isActiveAndEnabled) return;
+            
             // Client-side notification of team assignment
             if (debugTeamUpdates)
                 Debug.Log($"[TeamManager] You've been assigned to team {teamId}");
@@ -307,6 +326,8 @@ namespace EpochLegends.Systems.Team.Manager
         [ClientRpc]
         private void RpcNotifyTeamChange(uint playerNetId, int oldTeamId, int newTeamId)
         {
+            if(!isActiveAndEnabled) return;
+            
             // Client-side notification of team change for any player
             if (NetworkClient.spawned.TryGetValue(playerNetId, out NetworkIdentity identity))
             {
@@ -345,6 +366,8 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public void RegisterHero(Hero hero, int teamId)
         {
+            if(!isActiveAndEnabled) return;
+            
             if (!IsValidTeamId(teamId) || hero == null) return;
             
             uint heroNetId = hero.netId;
@@ -365,6 +388,8 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         public void UnregisterHero(Hero hero)
         {
+            if(!isActiveAndEnabled) return;
+            
             if (hero == null) return;
             
             int teamId = hero.TeamId;
@@ -382,6 +407,8 @@ namespace EpochLegends.Systems.Team.Manager
         [Server]
         private void ApplyTeamVisuals(Hero hero, int teamId)
         {
+            if(!isActiveAndEnabled) return;
+            
             // Apply team colors, effects, etc.
             TeamConfig config = GetTeamConfig(teamId);
             
@@ -392,6 +419,8 @@ namespace EpochLegends.Systems.Team.Manager
         [ClientRpc]
         private void RpcApplyTeamVisuals(uint heroNetId, int teamId)
         {
+            if(!isActiveAndEnabled) return;
+            
             // Client-side application of team visuals
             if (NetworkClient.spawned.TryGetValue(heroNetId, out NetworkIdentity identity))
             {
@@ -413,6 +442,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public TeamConfig GetTeamConfig(int teamId)
         {
+            if(!isActiveAndEnabled) return null;
+            
             foreach (var config in teamConfigs)
             {
                 if (config.teamId == teamId)
@@ -427,12 +458,16 @@ namespace EpochLegends.Systems.Team.Manager
         
         public Color GetTeamColor(int teamId)
         {
+            if(!isActiveAndEnabled) return Color.white;
+            
             TeamConfig config = GetTeamConfig(teamId);
             return config != null ? config.teamColor : Color.white;
         }
         
         public int GetTeamSize(int teamId)
         {
+            if(!isActiveAndEnabled) return 0;
+            
             if (playersByTeam.TryGetValue(teamId, out List<uint> players))
             {
                 return players.Count;
@@ -443,6 +478,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public List<Hero> GetTeamHeroes(int teamId)
         {
+            if(!isActiveAndEnabled) return new List<Hero>();
+            
             List<Hero> heroes = new List<Hero>();
             
             if (heroesByTeam.TryGetValue(teamId, out List<uint> heroNetIds))
@@ -465,6 +502,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public int GetPlayerTeam(NetworkConnection player)
         {
+            if(!isActiveAndEnabled) return -1;
+            
             if (player == null || player.identity == null) return -1;
             
             uint netId = player.identity.netId;
@@ -478,6 +517,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public bool AreAllies(Hero hero1, Hero hero2)
         {
+            if(!isActiveAndEnabled) return false;
+            
             if (hero1 == null || hero2 == null)
                 return false;
                 
@@ -486,6 +527,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public bool AreEnemies(Hero hero1, Hero hero2)
         {
+            if(!isActiveAndEnabled) return false;
+            
             if (hero1 == null || hero2 == null)
                 return false;
                 
@@ -511,6 +554,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public Transform GetTeamSpawnPoint(int teamId, int index = 0)
         {
+            if(!isActiveAndEnabled) return null;
+            
             TeamConfig config = GetTeamConfig(teamId);
             
             if (config == null || config.spawnPoints == null || config.spawnPoints.Length == 0)
@@ -526,6 +571,8 @@ namespace EpochLegends.Systems.Team.Manager
         
         public Transform GetRandomTeamSpawnPoint(int teamId)
         {
+            if(!isActiveAndEnabled) return null;
+            
             TeamConfig config = GetTeamConfig(teamId);
             
             if (config == null || config.spawnPoints == null || config.spawnPoints.Length == 0)

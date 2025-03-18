@@ -1,11 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
 using Mirror;
 using EpochLegends.Core.Hero;
 using EpochLegends.Core.HeroSelection.Manager;
 using EpochLegends.Core.HeroSelection.Registry;
+using EpochLegends.Core.UI.Manager;
 
 namespace EpochLegends.UI.HeroSelection
 {
@@ -50,51 +52,143 @@ namespace EpochLegends.UI.HeroSelection
         private List<HeroCard> heroCards = new List<HeroCard>();
         private bool isReady = false;
         private float lastSecond = 0;
+        private bool managersFound = false;
         
         private void Awake()
         {
-            // Find managers
-            selectionManager = FindObjectOfType<HeroSelectionManager>();
-            heroRegistry = FindObjectOfType<HeroRegistry>();
+            // Primero, intentamos encontrar los managers en la escena
+            FindManagers();
             
-            if (selectionManager == null || heroRegistry == null)
+            if (!managersFound)
             {
-                Debug.LogError("[HeroSelectionUIController] Required managers not found in scene!");
-                return;
+                Debug.LogWarning("[HeroSelectionUIController] Required managers not found in scene - will try to find them with delay");
+                // Intentaremos encontrarlos después con retraso
+                StartCoroutine(FindManagersWithDelay());
             }
             
-            // Set up button listeners
-            selectButton.onClick.AddListener(OnSelectButtonClicked);
-            readyButton.onClick.AddListener(OnReadyButtonClicked);
+            // Set up button listeners even if managers aren't found yet
+            if (selectButton != null)
+                selectButton.onClick.AddListener(OnSelectButtonClicked);
+                
+            if (readyButton != null)
+                readyButton.onClick.AddListener(OnReadyButtonClicked);
             
             // Initially hide details panel until hero is selected
-            heroDetailsPanel.SetActive(false);
+            if (heroDetailsPanel != null)
+                heroDetailsPanel.SetActive(false);
+        }
+        
+        private void FindManagers()
+        {
+            // Intentar encontrar los managers a través del ManagersController primero
+            var managersController = FindObjectOfType<EpochLegends.Core.ManagersController>();
+            
+            if (managersController != null)
+            {
+                selectionManager = managersController.GetManager<HeroSelectionManager>("HeroSelectionManager");
+                heroRegistry = managersController.GetManager<HeroRegistry>("HeroRegistry");
+                
+                if (selectionManager == null || heroRegistry == null)
+                {
+                    // Intentar búsqueda directa si no los encontramos en el controller
+                    selectionManager = FindObjectOfType<HeroSelectionManager>();
+                    heroRegistry = FindObjectOfType<HeroRegistry>();
+                }
+            }
+            else
+            {
+                // Búsqueda directa si no hay ManagersController
+                selectionManager = FindObjectOfType<HeroSelectionManager>();
+                heroRegistry = FindObjectOfType<HeroRegistry>();
+            }
+            
+            // Verificar si se encontraron ambos managers
+            managersFound = (selectionManager != null && heroRegistry != null);
+            
+            if (managersFound)
+            {
+                Debug.Log("[HeroSelectionUIController] Managers found successfully");
+            }
+            else
+            {
+                Debug.LogWarning("[HeroSelectionUIController] Required managers not found in scene!");
+            }
+        }
+        
+        private IEnumerator FindManagersWithDelay()
+        {
+            // Intentar encontrar los managers varias veces con retrasos
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                // Esperar un momento antes de intentar de nuevo
+                yield return new WaitForSeconds(0.5f);
+                
+                FindManagers();
+                
+                if (managersFound)
+                {
+                    Debug.Log($"[HeroSelectionUIController] Managers found after {attempt+1} attempts");
+                    
+                    // Inicializar la UI ahora que tenemos los managers
+                    if (isActiveAndEnabled)
+                    {
+                        // Registrarse para eventos
+                        RegisterForEvents();
+                        
+                        // Cargar datos
+                        PopulateHeroGrid();
+                        InitializePlayerSelections();
+                    }
+                    
+                    break;
+                }
+            }
+            
+            if (!managersFound)
+            {
+                Debug.LogError("[HeroSelectionUIController] Failed to find managers after multiple attempts!");
+            }
+        }
+        
+        private void RegisterForEvents()
+        {
+            // Register for hero selection events
+            HeroSelectionManager.OnHeroSelected += OnHeroSelected;
+            HeroSelectionManager.OnSelectionComplete += OnSelectionComplete;
+        }
+        
+        private void UnregisterFromEvents()
+        {
+            // Unregister from hero selection events
+            HeroSelectionManager.OnHeroSelected -= OnHeroSelected;
+            HeroSelectionManager.OnSelectionComplete -= OnSelectionComplete;
         }
         
         public override void OnStartClient()
         {
             base.OnStartClient();
             
-            // Register for hero selection events
-            HeroSelectionManager.OnHeroSelected += OnHeroSelected;
-            HeroSelectionManager.OnSelectionComplete += OnSelectionComplete;
-            
-            // Load hero grid
-            PopulateHeroGrid();
-            
-            // Initialize player selection displays
-            InitializePlayerSelections();
+            if (managersFound)
+            {
+                // Register for events
+                RegisterForEvents();
+                
+                // Load hero grid and initialize player selections
+                PopulateHeroGrid();
+                InitializePlayerSelections();
+            }
         }
         
         private void OnDestroy()
         {
-            // Unregister from events - these operations are safe even if events have no subscribers
-            HeroSelectionManager.OnHeroSelected -= OnHeroSelected;
-            HeroSelectionManager.OnSelectionComplete -= OnSelectionComplete;
+            // Unregister from events to prevent memory leaks
+            UnregisterFromEvents();
         }
         
         private void Update()
         {
+            if (!managersFound) return;
+            
             // Update timer display
             UpdateTimer();
         }
@@ -103,6 +197,12 @@ namespace EpochLegends.UI.HeroSelection
         
         private void PopulateHeroGrid()
         {
+            if (!managersFound || heroGridContainer == null)
+            {
+                Debug.LogWarning("[HeroSelectionUIController] Cannot populate hero grid - managers or container missing");
+                return;
+            }
+            
             // Clear existing hero cards
             foreach (Transform child in heroGridContainer)
             {
@@ -132,6 +232,12 @@ namespace EpochLegends.UI.HeroSelection
         
         private void InitializePlayerSelections()
         {
+            if (!managersFound)
+            {
+                Debug.LogWarning("[HeroSelectionUIController] Cannot initialize player selections - managers missing");
+                return;
+            }
+            
             // Clear existing selections
             ClearPlayerSelections();
             
@@ -166,6 +272,8 @@ namespace EpochLegends.UI.HeroSelection
             // Clear team panels
             foreach (Transform teamPanel in teamPanels)
             {
+                if (teamPanel == null) continue;
+                
                 foreach (Transform child in teamPanel)
                 {
                     // Skip static UI elements like headers
@@ -213,7 +321,9 @@ namespace EpochLegends.UI.HeroSelection
         {
             if (hero == null)
             {
-                heroDetailsPanel.SetActive(false);
+                if (heroDetailsPanel != null)
+                    heroDetailsPanel.SetActive(false);
+                    
                 selectedHero = null;
                 return;
             }
@@ -222,12 +332,18 @@ namespace EpochLegends.UI.HeroSelection
             selectedHero = hero;
             
             // Show panel
-            heroDetailsPanel.SetActive(true);
+            if (heroDetailsPanel != null)
+                heroDetailsPanel.SetActive(true);
             
             // Update hero details
-            heroNameText.text = hero.DisplayName;
-            heroRoleText.text = hero.Archetype.ToString();
-            heroDescriptionText.text = hero.Description;
+            if (heroNameText != null)
+                heroNameText.text = hero.DisplayName;
+                
+            if (heroRoleText != null)
+                heroRoleText.text = hero.Archetype.ToString();
+                
+            if (heroDescriptionText != null)
+                heroDescriptionText.text = hero.Description;
             
             if (heroImage != null && hero.HeroPortrait != null)
             {
@@ -235,45 +351,52 @@ namespace EpochLegends.UI.HeroSelection
             }
             
             // Clear ability container
-            foreach (Transform child in abilitiesContainer)
+            if (abilitiesContainer != null)
             {
-                Destroy(child.gameObject);
-            }
-            
-            // Populate abilities
-            if (hero.Abilities != null)
-            {
-                foreach (var ability in hero.Abilities)
+                foreach (Transform child in abilitiesContainer)
                 {
-                    GameObject abilityObj = Instantiate(abilityDisplayPrefab, abilitiesContainer);
-                    AbilityDisplay abilityDisplay = abilityObj.GetComponent<AbilityDisplay>();
-                    
-                    if (abilityDisplay != null)
-                    {
-                        abilityDisplay.Initialize(ability);
-                    }
+                    Destroy(child.gameObject);
                 }
                 
-                Debug.Log($"[HeroSelectionUIController] Displayed {hero.Abilities.Count} abilities for {hero.DisplayName}");
+                // Populate abilities
+                if (hero.Abilities != null && abilityDisplayPrefab != null)
+                {
+                    foreach (var ability in hero.Abilities)
+                    {
+                        GameObject abilityObj = Instantiate(abilityDisplayPrefab, abilitiesContainer);
+                        AbilityDisplay abilityDisplay = abilityObj.GetComponent<AbilityDisplay>();
+                        
+                        if (abilityDisplay != null)
+                        {
+                            abilityDisplay.Initialize(ability);
+                        }
+                    }
+                    
+                    Debug.Log($"[HeroSelectionUIController] Displayed {hero.Abilities.Count} abilities for {hero.DisplayName}");
+                }
             }
             
             // Update select button
-            bool isHeroSelected = selectionManager.IsHeroSelectedByAnyPlayer(hero.HeroId);
-            bool isLocalHeroSelection = IsLocalPlayerSelection(hero.HeroId);
-            
-            selectButton.interactable = !isHeroSelected || isLocalHeroSelection;
-            // Obtener el texto del botón - funciona con Text o TMP_Text
-            var buttonTextComponent = selectButton.GetComponentInChildren<TMP_Text>() as Component;
-            if (buttonTextComponent == null)
-                buttonTextComponent = selectButton.GetComponentInChildren<Text>();
+            if (selectButton != null && selectionManager != null)
+            {
+                bool isHeroSelected = selectionManager.IsHeroSelectedByAnyPlayer(hero.HeroId);
+                bool isLocalHeroSelection = IsLocalPlayerSelection(hero.HeroId);
                 
-            // Establecer el texto según el estado
-            string buttonText = isLocalHeroSelection ? "Seleccionado" : (isHeroSelected ? "No Disponible" : "Seleccionar Héroe");
-            
-            if (buttonTextComponent is TMP_Text)
-                ((TMP_Text)buttonTextComponent).text = buttonText;
-            else if (buttonTextComponent is Text)
-                ((Text)buttonTextComponent).text = buttonText;
+                selectButton.interactable = !isHeroSelected || isLocalHeroSelection;
+                
+                // Obtener el texto del botón - funciona con Text o TMP_Text
+                var buttonTextComponent = selectButton.GetComponentInChildren<TMP_Text>() as Component;
+                if (buttonTextComponent == null)
+                    buttonTextComponent = selectButton.GetComponentInChildren<Text>();
+                    
+                // Establecer el texto según el estado
+                string buttonText = isLocalHeroSelection ? "Seleccionado" : (isHeroSelected ? "No Disponible" : "Seleccionar Héroe");
+                
+                if (buttonTextComponent is TMP_Text)
+                    ((TMP_Text)buttonTextComponent).text = buttonText;
+                else if (buttonTextComponent is Text)
+                    ((Text)buttonTextComponent).text = buttonText;
+            }
         }
         
         #endregion
@@ -282,7 +405,7 @@ namespace EpochLegends.UI.HeroSelection
         
         private void UpdatePlayerSelections()
         {
-            if (teamPanels == null || teamPanels.Length < 2 || selectionManager == null)
+            if (!managersFound || teamPanels == null || teamPanels.Length < 2 || selectionManager == null)
                 return;
                 
             // In a real implementation, you'd get all connected players and their selections
@@ -311,7 +434,7 @@ namespace EpochLegends.UI.HeroSelection
                     
                     // Get selected hero if any
                     HeroDefinition selectedHero = null;
-                    if (!string.IsNullOrEmpty(playerInfo.SelectedHeroId))
+                    if (!string.IsNullOrEmpty(playerInfo.SelectedHeroId) && heroRegistry != null)
                     {
                         selectedHero = heroRegistry.GetHeroById(playerInfo.SelectedHeroId);
                     }
@@ -350,31 +473,36 @@ namespace EpochLegends.UI.HeroSelection
         {
             // Validate team ID (1-based in our system)
             int teamIndex = teamId - 1;
-            if (teamIndex < 0 || teamIndex >= teamPanels.Length)
+            if (teamIndex < 0 || teamIndex >= teamPanels.Length || teamPanels[teamIndex] == null)
                 teamIndex = 0;
 
             Transform parentPanel = teamPanels[teamIndex];
             
-            GameObject displayObj = Instantiate(playerSelectionPrefab, parentPanel);
-            PlayerSelectionDisplay display = displayObj.GetComponent<PlayerSelectionDisplay>();
-            
-            if (display != null)
+            if (playerSelectionPrefab != null)
             {
-                // Get hero definition if hero ID is provided
-                HeroDefinition hero = null;
-                if (!string.IsNullOrEmpty(heroId))
-                {
-                    hero = heroRegistry.GetHeroById(heroId);
-                }
+                GameObject displayObj = Instantiate(playerSelectionPrefab, parentPanel);
+                PlayerSelectionDisplay display = displayObj.GetComponent<PlayerSelectionDisplay>();
                 
-                display.Initialize(playerName, isLocalPlayer, hero);
-                display.SetPlayerNetId(netId);
-                playerSelections[netId] = display;
+                if (display != null)
+                {
+                    // Get hero definition if hero ID is provided
+                    HeroDefinition hero = null;
+                    if (!string.IsNullOrEmpty(heroId) && heroRegistry != null)
+                    {
+                        hero = heroRegistry.GetHeroById(heroId);
+                    }
+                    
+                    display.Initialize(playerName, isLocalPlayer, hero);
+                    display.SetPlayerNetId(netId);
+                    playerSelections[netId] = display;
+                }
             }
         }
         
         private void UpdateLocalPlayerSelectionUI()
         {
+            if (!managersFound) return;
+            
             // Update ready button text
             UpdateReadyButtonText();
             
@@ -408,6 +536,8 @@ namespace EpochLegends.UI.HeroSelection
         
         private bool IsLocalPlayerSelection(string heroId)
         {
+            if (!managersFound) return false;
+            
             // Check if the local player has selected this hero
             if (NetworkClient.localPlayer != null)
             {
@@ -425,30 +555,29 @@ namespace EpochLegends.UI.HeroSelection
         
         private void UpdateTimer()
         {
-            if (timerText != null && selectionManager != null)
+            if (!managersFound || timerText == null || selectionManager == null) return;
+            
+            float remainingTime = selectionManager.GetRemainingTime();
+            timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
+            
+            // Play tick sound on each second change when time is low
+            int currentSecond = Mathf.CeilToInt(remainingTime);
+            if (currentSecond != lastSecond && currentSecond <= 10 && currentSecond > 0)
             {
-                float remainingTime = selectionManager.GetRemainingTime();
-                timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
+                PlaySound(timerTickSound);
                 
-                // Play tick sound on each second change when time is low
-                int currentSecond = Mathf.CeilToInt(remainingTime);
-                if (currentSecond != lastSecond && currentSecond <= 10 && currentSecond > 0)
+                // Make timer text red when time is low
+                if (currentSecond <= 5)
                 {
-                    PlaySound(timerTickSound);
-                    
-                    // Make timer text red when time is low
-                    if (currentSecond <= 5)
-                    {
-                        timerText.color = Color.red;
-                    }
+                    timerText.color = Color.red;
                 }
-                lastSecond = currentSecond;
             }
+            lastSecond = currentSecond;
         }
         
         private bool CheckAllPlayersReady()
         {
-            if (selectionManager == null) return false;
+            if (!managersFound || selectionManager == null) return false;
             
             // Check if all players are ready
             var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
@@ -480,7 +609,7 @@ namespace EpochLegends.UI.HeroSelection
         
         public void OnSelectButtonClicked()
         {
-            if (selectedHero == null || selectionManager == null) return;
+            if (!managersFound || selectedHero == null || selectionManager == null) return;
             
             // Send hero selection to server
             selectionManager.SelectHeroLocally(selectedHero.HeroId);
@@ -495,7 +624,7 @@ namespace EpochLegends.UI.HeroSelection
         
         public void OnReadyButtonClicked()
         {
-            if (selectionManager == null) return;
+            if (!managersFound || selectionManager == null) return;
             
             // Check if a hero is selected
             uint localPlayerNetId = NetworkClient.localPlayer?.netId ?? 100; // Use 100 for testing
@@ -525,6 +654,8 @@ namespace EpochLegends.UI.HeroSelection
         
         private void OnHeroSelected(uint playerNetId, string heroId)
         {
+            if (!managersFound) return;
+            
             // Update the UI when any player selects a hero
             UpdateLocalPlayerSelectionUI();
             UpdatePlayerSelections();

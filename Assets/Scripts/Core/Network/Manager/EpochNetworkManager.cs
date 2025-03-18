@@ -47,7 +47,8 @@ namespace EpochLegends.Core.Network.Manager
             }
 
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            // El DontDestroyOnLoad está ocurriendo en ManagersController, así que no lo necesitamos aquí
+            // DontDestroyOnLoad(gameObject);
         }
 
         public void StartHost(string name, string password, int maxConnections)
@@ -58,6 +59,11 @@ namespace EpochLegends.Core.Network.Manager
             
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Starting host: {name}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxConnections}");
+            
+            // Limpiar cualquier manejador existente para prevenir duplicados
+            NetworkServer.UnregisterHandler<ServerPasswordMessage>();
+            NetworkServer.UnregisterHandler<GameStateRequestMessage>();
+            NetworkServer.UnregisterHandler<EpochLegends.ReadyStateMessage>();
             
             // Register message handlers
             NetworkServer.RegisterHandler<ServerPasswordMessage>(OnServerPasswordMessage);
@@ -176,6 +182,9 @@ namespace EpochLegends.Core.Network.Manager
             if (debugNetwork)
                 Debug.Log("[NetworkManager] Client started - registering message handlers");
             
+            // Limpiar manejadores existentes para prevenir duplicados
+            NetworkClient.UnregisterHandler<GameStateResponseMessage>();
+            
             // Register client-side message handlers
             NetworkClient.RegisterHandler<GameStateResponseMessage>(OnGameStateResponseMessage);
             
@@ -293,6 +302,17 @@ namespace EpochLegends.Core.Network.Manager
             
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Client scene changed to: {SceneManager.GetActiveScene().name}");
+            
+            // Asegurar que el cliente esté listo después de cambio de escena
+            if (NetworkClient.active && !NetworkClient.ready)
+            {
+                Debug.Log("[NetworkManager] Marking client as ready after scene change");
+                NetworkClient.Ready();
+                
+                // Si este cliente es host, no necesita solicitar estado adicional
+                if (NetworkServer.active)
+                    return;
+            }
             
             // Request updated state for UI (for both host and pure clients)
             if (NetworkClient.active && NetworkClient.isConnected)

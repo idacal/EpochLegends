@@ -1,0 +1,38 @@
+=== Network Diagnostics Started at 17-03-2025 21:15:10 ===
+Active Scene: MainMenu
+Network Mode: Client
+[21:15:10.843] NetworkDiagnostics initialized at 17-03-2025 21:15:10
+[21:15:10.975] CLIENT SCENE CHANGED: Lobby
+[21:15:11.399] CLIENT SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[21:15:11.399] CLIENT SPAWN: HeroSelectionManager, NetID: 2, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[21:15:11.399] CLIENT SPAWN: GameManager, NetID: 3, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[21:15:11.400] CLIENT SPAWN: HeroRegistry, NetID: 4, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[21:15:11.400] CLIENT SPAWN: TeamManager, NetID: 5, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[21:15:11.444] CLIENT SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[21:15:11.444] CLIENT SPAWN: temp_player(Clone), NetID: 7, SceneID: 0, AssetID: 1462839937
+[21:15:11.444] CLIENT SPAWN: temp_player(Clone), NetID: 8, SceneID: 0, AssetID: 1462839937
+[21:15:15.915] CLIENT SCENE CHANGED: HeroSelection
+[21:15:16.412] CLIENT SPAWN: temp_player(Clone), NetID: 10, SceneID: 0, AssetID: 1462839937
+[21:15:16.412] CLIENT SPAWN: HeroSelectionCanvas, NetID: 9, SceneID: 7442F4A325BB41ED, AssetID: 0
+[21:15:16.413] CLIENT SPAWN: temp_player(Clone), NetID: 11, SceneID: 0, AssetID: 1462839937
+[21:15:16.413] CLIENT UNSPAWN: TeamAssignment, NetID: 1
+[21:15:16.413] CLIENT UNSPAWN: HeroSelectionManager, NetID: 2
+[21:15:16.413] CLIENT UNSPAWN: GameManager, NetID: 3
+[21:15:16.413] CLIENT UNSPAWN: HeroRegistry, NetID: 4
+[21:15:16.413] CLIENT UNSPAWN: TeamManager, NetID: 5
+[21:15:16.413] CLIENT UNSPAWN: LobbyManager, NetID: 6
+[21:15:16.414] CLIENT UNSPAWN: temp_player(Clone), NetID: 7
+[21:15:16.414] CLIENT UNSPAWN: temp_player(Clone), NetID: 8
+[21:15:43.745] === NETWORK PREFAB DIAGNOSTICS ===
+Network Manager: Network Manager
+Registered Spawn Prefabs: 0
+
+Registered Prefabs:
+
+Current Spawned Objects:
+
+Statistics:
+- Total Spawns Detected: 0
+- Failed Spawns: 0
+
+=== Network Diagnostics Stopped at 17-03-2025 21:21:25 ===

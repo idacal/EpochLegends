@@ -99,7 +99,8 @@ namespace EpochLegends
             }
 
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            // ELIMINADO: DontDestroyOnLoad(gameObject);
+            // El ManagersController se encargará de preservar este objeto
             
             if (_debugNetworkUpdates)
                 Debug.Log("[GameManager] Initialized");
@@ -108,6 +109,9 @@ namespace EpochLegends
         public override void OnStartServer()
         {
             base.OnStartServer();
+            
+            // Eliminar cualquier manejador existente para evitar duplicados
+            NetworkServer.UnregisterHandler<ReadyStateMessage>();
             
             // Register server-side message handlers
             NetworkServer.RegisterHandler<ReadyStateMessage>(OnReadyStateMessage);
@@ -118,6 +122,8 @@ namespace EpochLegends
         
         private void NotifyPlayerDataChanged()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log("[GameManager] Notifying player data changed");
                 
@@ -144,6 +150,8 @@ namespace EpochLegends
         
         private void OnNetworkGameStateUpdated()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log("[GameManager] Game state updated event received");
                 
@@ -162,6 +170,8 @@ namespace EpochLegends
         [Client]
         private void RequestStateUpdate()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (isClientOnly && NetworkClient.active)
             {
                 if (_debugNetworkUpdates)
@@ -174,7 +184,7 @@ namespace EpochLegends
 
         private void Update()
         {
-            if (!NetworkServer.active) return;
+            if (!isActiveAndEnabled || !NetworkServer.active) return;
 
             switch (_currentState)
             {
@@ -207,6 +217,8 @@ namespace EpochLegends
         [Server]
         public void OnPlayerJoined(NetworkConnection conn)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (conn == null || conn.identity == null) 
             {
                 Debug.LogError("OnPlayerJoined: Connection or identity is null");
@@ -246,12 +258,16 @@ namespace EpochLegends
         [Server]
         private void TriggerUIRefreshForAllClients()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             RpcTriggerUIRefresh();
         }
         
         [ClientRpc]
         private void RpcTriggerUIRefresh()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log("[GameManager] Received UI refresh command from server");
                 
@@ -261,6 +277,8 @@ namespace EpochLegends
         [Server]
         public void OnPlayerLeft(NetworkConnection conn)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_connectionToNetId.TryGetValue(conn, out uint netId))
             {
                 if (_connectedPlayers.ContainsKey(netId))
@@ -284,6 +302,8 @@ namespace EpochLegends
         [Server]
         public void SetPlayerReady(NetworkConnection conn, bool isReady)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_connectionToNetId.TryGetValue(conn, out uint netId) && _connectedPlayers.ContainsKey(netId))
             {
                 var playerInfo = _connectedPlayers[netId];
@@ -307,6 +327,8 @@ namespace EpochLegends
         [Server]
         private void OnReadyStateMessage(NetworkConnectionToClient conn, ReadyStateMessage msg)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] Server received ready state: {msg.isReady} from connection {conn.connectionId}");
             
@@ -316,6 +338,8 @@ namespace EpochLegends
         [ClientRpc]
         private void RpcPlayerJoined(uint playerNetId, int teamId)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} joined team {teamId}");
                 
@@ -329,6 +353,8 @@ namespace EpochLegends
         [ClientRpc]
         private void RpcPlayerLeft(uint playerNetId, int teamId)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} left from team {teamId}");
                 
@@ -342,6 +368,8 @@ namespace EpochLegends
         [ClientRpc]
         private void RpcPlayerReadyChanged(uint playerNetId, bool isReady)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} ready state updated to {isReady}");
             
@@ -355,6 +383,8 @@ namespace EpochLegends
         [Server]
         public void SendStateToClient(NetworkConnection conn)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] Sending game state to client {conn}");
                 
@@ -374,6 +404,8 @@ namespace EpochLegends
         [TargetRpc]
         private void TargetRefreshUI(NetworkConnection target)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log("[GameManager] Received explicit UI refresh command from server");
             
@@ -384,6 +416,8 @@ namespace EpochLegends
         // Game state change callback
         private void OnGameStateChanged(GameState oldState, GameState newState)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] Game state changed from {oldState} to {newState}");
                 
@@ -435,6 +469,8 @@ namespace EpochLegends
         [Server]
         public void StartHeroSelection()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             _currentState = GameState.HeroSelection;
             _stateTimer = heroSelectionTime;
             
@@ -453,6 +489,8 @@ namespace EpochLegends
         [Server]
         public void StartGame()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             _currentState = GameState.Playing;
             
             // Notify all clients about the state change
@@ -467,6 +505,8 @@ namespace EpochLegends
         [Server]
         public void EndGame(int winningTeamId)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             _currentState = GameState.GameOver;
             _stateTimer = 10f; // Display results for 10 seconds
             
@@ -479,6 +519,8 @@ namespace EpochLegends
         [ClientRpc]
         private void RpcNotifyGameOver(int winningTeamId)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             Debug.Log($"Game over! Team {winningTeamId} wins!");
             // Client code to show game over UI
         }
@@ -486,6 +528,8 @@ namespace EpochLegends
         [ClientRpc]
         private void RpcGameStateChanged(GameState newState)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             if (_debugNetworkUpdates)
                 Debug.Log($"[GameManager] Game state changed to {newState}");
                 
@@ -497,6 +541,8 @@ namespace EpochLegends
         [Server]
         private void ReturnToLobby()
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             _currentState = GameState.Lobby;
             
             // Reset player ready status
@@ -522,6 +568,8 @@ namespace EpochLegends
         [Server]
         public void OnHeroCreated(Hero hero)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             Debug.Log($"Hero created: {hero.name}");
             // Add any logic needed when a hero is created
         }
@@ -530,6 +578,8 @@ namespace EpochLegends
         [Server]
         public void OnHeroSelectionComplete(Dictionary<uint, string> selectionResults)
         {
+            if (this == null || !isActiveAndEnabled) return;
+            
             Debug.Log("Hero selection phase completed");
             
             // Process the hero selections

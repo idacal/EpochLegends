@@ -30,25 +30,25 @@ namespace EpochLegends.Core
         // Instancias de managers creadas
         private Dictionary<string, GameObject> instantiatedManagers = new Dictionary<string, GameObject>();
 
-private void Awake()
-{
-    if (Instance != null && Instance != this)
-    {
-        Destroy(gameObject);
-        return;
-    }
-    
-    Instance = this;
-    
-    // Preserva todo el contenedor y sus hijos
-    DontDestroyOnLoad(gameObject);
-    
-    if (debugEnabled) // Usa el nombre correcto de tu variable de depuración
-        Debug.Log("[ManagersController] Initialized and marked DontDestroyOnLoad");
-    
-    // Inicializar todos los managers necesarios
-    InitializeManagers();
-}
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            
+            Instance = this;
+            
+            // Preserva todo el contenedor y sus hijos
+            DontDestroyOnLoad(gameObject);
+            
+            if (debugEnabled)
+                Debug.Log("[ManagersController] Initialized and marked DontDestroyOnLoad");
+            
+            // Inicializar todos los managers necesarios
+            InitializeManagers();
+        }
         
         private void InitializeManagers()
         {
@@ -75,17 +75,18 @@ private void Awake()
                 var existingInstance = FindManagerInScene(managerEntry.managerName);
                 if (existingInstance != null)
                 {
-                    DontDestroyOnLoad(existingInstance);
+                    // Asegurar que sea hijo de este controlador
+                    existingInstance.transform.SetParent(this.transform);
                     instantiatedManagers[managerEntry.managerName] = existingInstance;
+                    
                     if (debugEnabled)
-                        Debug.Log($"[ManagersController] Found existing manager '{managerEntry.managerName}', marking DontDestroyOnLoad");
+                        Debug.Log($"[ManagersController] Found existing manager '{managerEntry.managerName}', made it a child of ManagersController");
                     continue;
                 }
                 
                 // Crear nueva instancia
-                var instance = Instantiate(managerEntry.prefab);
+                var instance = Instantiate(managerEntry.prefab, this.transform);
                 instance.name = managerEntry.managerName;
-                DontDestroyOnLoad(instance);
                 instantiatedManagers[managerEntry.managerName] = instance;
                 
                 if (debugEnabled)
@@ -129,6 +130,25 @@ private void Awake()
             }
             
             return null;
+        }
+        
+        public T GetManager<T>() where T : Component
+        {
+            // Buscar por tipo entre todos los managers
+            foreach (var manager in instantiatedManagers.Values)
+            {
+                if (manager != null)
+                {
+                    T component = manager.GetComponent<T>();
+                    if (component != null)
+                    {
+                        return component;
+                    }
+                }
+            }
+            
+            // Si no lo encontramos entre los managers, buscar en toda la escena
+            return FindObjectOfType<T>();
         }
         
         public bool HasManager(string managerName)

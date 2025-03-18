@@ -1,0 +1,41 @@
+=== Network Diagnostics Started at 18-03-2025 18:55:51 ===
+Active Scene: MainMenu
+Network Mode: Client
+[18:55:51.135] NetworkDiagnostics initialized at 18-03-2025 18:55:51
+[18:55:51.248] CLIENT SCENE CHANGED: Lobby
+[18:55:51.722] CLIENT SPAWN: TeamManager, NetID: 1, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[18:55:51.722] CLIENT SPAWN: HeroRegistry, NetID: 2, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[18:55:51.722] CLIENT SPAWN: HeroSelectionManager, NetID: 3, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[18:55:51.723] CLIENT SPAWN: TeamAssignment, NetID: 4, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[18:55:51.723] CLIENT SPAWN: GameManager, NetID: 5, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[18:55:51.724] CLIENT SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[18:55:51.724] CLIENT SPAWN: Kael(Clone), NetID: 7, SceneID: 0, AssetID: 1462839937
+[18:55:51.724] CLIENT SPAWN: Kael(Clone), NetID: 8, SceneID: 0, AssetID: 1462839937
+[18:55:54.906] CLIENT SCENE CHANGED: HeroSelection
+[18:55:55.235] CLIENT SPAWN: HeroSelectionCanvas, NetID: 11, SceneID: 7442F4A325BB41ED, AssetID: 0
+[18:55:55.235] CLIENT SPAWN: HeroRegistry, NetID: 9, SceneID: 7442F4A3EAB31567, AssetID: 1831850035
+[18:55:55.236] CLIENT SPAWN: HeroSelectionManager, NetID: 10, SceneID: 7442F4A30C7F5961, AssetID: 4181262340
+[18:55:55.236] CLIENT SPAWN: Kael(Clone), NetID: 13, SceneID: 0, AssetID: 1462839937
+[18:55:55.236] CLIENT SPAWN: Kael(Clone), NetID: 12, SceneID: 0, AssetID: 1462839937
+[18:55:55.237] CLIENT UNSPAWN: TeamManager, NetID: 1
+[18:55:55.237] CLIENT UNSPAWN: HeroRegistry, NetID: 2
+[18:55:55.237] CLIENT UNSPAWN: HeroSelectionManager, NetID: 3
+[18:55:55.237] CLIENT UNSPAWN: TeamAssignment, NetID: 4
+[18:55:55.237] CLIENT UNSPAWN: GameManager, NetID: 5
+[18:55:55.237] CLIENT UNSPAWN: LobbyManager, NetID: 6
+[18:55:55.238] CLIENT UNSPAWN: Kael(Clone), NetID: 7
+[18:55:55.238] CLIENT UNSPAWN: Kael(Clone), NetID: 8
+[18:56:19.556] CLIENT SCENE CHANGED: Gameplay
+[18:56:20.619] === NETWORK PREFAB DIAGNOSTICS ===
+Network Manager: Network Manager
+Registered Spawn Prefabs: 0
+
+Registered Prefabs:
+
+Current Spawned Objects:
+
+Statistics:
+- Total Spawns Detected: 0
+- Failed Spawns: 0
+
+=== Network Diagnostics Stopped at 18-03-2025 18:57:39 ===

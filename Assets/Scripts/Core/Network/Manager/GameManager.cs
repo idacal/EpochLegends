@@ -59,6 +59,7 @@ namespace EpochLegends
         
         [Header("Debug Settings")]
         [SerializeField] private bool enableDebugLogs = true;
+        [SerializeField] private bool persistAcrossScenes = true;
 
         [SyncVar(hook = nameof(OnGameStateChanged))]
         private GameState _currentState = GameState.Lobby;
@@ -71,6 +72,9 @@ namespace EpochLegends
         
         // Connection to netId mapping (server-side only)
         private Dictionary<NetworkConnection, uint> _connectionToNetId = new Dictionary<NetworkConnection, uint>();
+        
+        // Diccionario para almacenar selecciones de héroes para poder recuperarlas después de un cambio de escena
+        private Dictionary<uint, string> _heroSelections = new Dictionary<uint, string>();
 
         public GameState CurrentState => _currentState;
         public int ConnectedPlayerCount => _connectedPlayers.Count;
@@ -99,8 +103,15 @@ namespace EpochLegends
             }
 
             Instance = this;
-            // ELIMINADO: DontDestroyOnLoad(gameObject);
-            // El ManagersController se encargará de preservar este objeto
+            
+            // Mantener entre escenas si está configurado así
+            if (persistAcrossScenes)
+            {
+                DontDestroyOnLoad(gameObject);
+                
+                if (enableDebugLogs)
+                    Debug.LogError("[GameManager] Configurado para persistir entre escenas");
+            }
             
             if (enableDebugLogs)
                 Debug.Log("[GameManager] Initialized");
@@ -480,20 +491,29 @@ namespace EpochLegends
             Debug.LogError("Starting hero selection phase with delay");
             
             // Añadir un retraso antes de cambiar la escena
-            StartCoroutine(DelayedSceneChange());
+            StartCoroutine(DelayedSceneChange(heroSelectionScene, 1.0f));
         }
 
-        // Añade este nuevo método
+        // Método seguro para cambiar de escena con retraso
         [Server]
-        private System.Collections.IEnumerator DelayedSceneChange()
+        private System.Collections.IEnumerator DelayedSceneChange(string sceneName, float delay)
         {
             // Esperar para dar tiempo a los clientes a prepararse
-            yield return new WaitForSeconds(1.0f);
+            yield return new WaitForSeconds(delay);
             
-            // Cambiar a la escena de selección de héroes
-            NetworkManager.singleton.ServerChangeScene(heroSelectionScene);
+            // Precaución para evitar errores si el objeto es destruido mientras esperamos
+            if (this == null || !isActiveAndEnabled) yield break;
             
-            Debug.LogError("Changed to hero selection scene");
+            try
+            {
+                // Cambiar la escena
+                Debug.LogError($"Cambiando a escena: {sceneName}");
+                NetworkManager.singleton.ServerChangeScene(sceneName);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Error al cambiar a escena {sceneName}: {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         [Server]
@@ -515,6 +535,9 @@ namespace EpochLegends
                 return;
             }
             
+            // Preparar a los clientes para el cambio de escena
+            RpcPrepareForSceneChange();
+            
             // Mostrar todas las escenas disponibles en el NetworkManager
             if (NetworkManager.singleton != null && NetworkManager.singleton is Mirror.NetworkManager netManager)
             {
@@ -533,15 +556,30 @@ namespace EpochLegends
                 Debug.LogError("NetworkManager no encontrado o no es de tipo Mirror.NetworkManager");
             }
             
-            // Load gameplay scene on all clients
-            try {
-                NetworkManager.singleton.ServerChangeScene(gameplayScene);
-                Debug.LogError("Solicitud de cambio de escena enviada");
-            } catch (System.Exception ex) {
-                Debug.LogError($"Error al cambiar escena: {ex.Message}\n{ex.StackTrace}");
+            // Usar un retraso para dar tiempo a los clientes a prepararse
+            StartCoroutine(DelayedSceneChange(gameplayScene, 0.5f));
+        }
+        
+        [ClientRpc]
+        private void RpcPrepareForSceneChange()
+        {
+            if (this == null || !isActiveAndEnabled) return;
+            
+            Debug.LogError("[GameManager] Preparando para cambio de escena");
+            
+            // Desactivar controladores que podrían causar problemas
+            var lobbyController = FindObjectOfType<EpochLegends.UI.Lobby.LobbyController>();
+            if (lobbyController != null)
+            {
+                lobbyController.enabled = false;
             }
             
-            Debug.LogError("Starting gameplay phase");
+            // Mostrar una pantalla de carga si es posible
+            var uiManager = FindObjectOfType<EpochLegends.Core.UI.Manager.UIManager>();
+            if (uiManager != null)
+            {
+                uiManager.ShowPanel(EpochLegends.Core.UI.Manager.UIPanel.Loading);
+            }
         }
 
         [Server]
@@ -600,15 +638,11 @@ namespace EpochLegends
             // Notify clients about the state change
             RpcGameStateChanged(_currentState);
             
-            // Load lobby scene on all clients
-            try {
-                NetworkManager.singleton.ServerChangeScene(lobbyScene);
-                Debug.LogError("Solicitado cambio a escena de lobby");
-            } catch (System.Exception ex) {
-                Debug.LogError($"Error al cambiar a escena de lobby: {ex.Message}");
-            }
+            // Prepara a los clientes para el cambio de escena
+            RpcPrepareForSceneChange();
             
-            Debug.LogError("Returning to lobby");
+            // Cargar la escena de lobby con retraso
+            StartCoroutine(DelayedSceneChange(lobbyScene, 0.5f));
         }
         
         [Server]
@@ -617,6 +651,13 @@ namespace EpochLegends
             if (this == null || !isActiveAndEnabled) return;
             
             Debug.LogError("GAMEMANAGER: OnHeroSelectionComplete llamado");
+            
+            // Guardar las selecciones en nuestro diccionario local
+            _heroSelections.Clear();
+            foreach (var pair in selectionResults)
+            {
+                _heroSelections[pair.Key] = pair.Value;
+            }
             
             // Proceso de diagnóstico
             foreach (var selection in selectionResults)
@@ -635,9 +676,13 @@ namespace EpochLegends
                 {
                     playerInfo.SelectedHeroId = heroId;
                     _connectedPlayers[playerNetId] = playerInfo;
+                    
+                    Debug.LogError($"Actualizada info del jugador {playerNetId} con héroe: {heroId}");
                 }
-                
-                Debug.LogError($"Jugador {playerNetId} seleccionó héroe: {heroId}");
+                else
+                {
+                    Debug.LogError($"No se encontró al jugador {playerNetId} en _connectedPlayers!");
+                }
             }
             
             // Asegurarse que la escena que queremos cargar existe
@@ -649,23 +694,41 @@ namespace EpochLegends
                 StartGame();
             } catch (System.Exception ex) {
                 Debug.LogError($"EXCEPCIÓN al iniciar juego: {ex.Message}\n{ex.StackTrace}");
-                // Intentar cargar la escena de forma directa
-                try {
-                    Debug.LogError("Intentando cargar escena directamente: " + gameplayScene);
-                    NetworkManager.singleton.ServerChangeScene(gameplayScene);
-                } catch (System.Exception ex2) {
-                    Debug.LogError($"SEGUNDA EXCEPCIÓN al cargar escena: {ex2.Message}");
-                }
+                
+                // Intento de recuperación: esperar un poco y volver a intentar
+                StartCoroutine(RetryStartGame());
             }
         }
-        // Añade este método a la clase GameManager.cs
-// Cerca de los otros métodos relacionados con los héroes
-
-        // Añade este método a la clase GameManager.cs
-// Con el namespace correcto para Hero
-
-[Server]
-public void OnHeroCreated(EpochLegends.Core.Hero.Hero hero)
+        
+        private System.Collections.IEnumerator RetryStartGame()
+        {
+            yield return new WaitForSeconds(1.0f);
+            
+            if (this == null || !isActiveAndEnabled) yield break;
+            
+            Debug.LogError("Reintentando StartGame...");
+            
+            try
+            {
+                // Mover directamente a Playing state
+                _currentState = GameState.Playing;
+                RpcGameStateChanged(_currentState);
+                
+                // Intentar cargar la escena directamente
+                if (NetworkManager.singleton != null)
+                {
+                    Debug.LogError("Cambiando escena directamente en segundo intento");
+                    NetworkManager.singleton.ServerChangeScene(gameplayScene);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"ERROR en segundo intento: {ex.Message}");
+            }
+        }
+        
+        [Server]
+public void OnHeroCreated(Hero hero)
 {
     if (this == null || !isActiveAndEnabled) return;
     
@@ -673,14 +736,78 @@ public void OnHeroCreated(EpochLegends.Core.Hero.Hero hero)
     {
         Debug.Log($"[GameManager] Hero created: {hero.name}");
         
-        // Aquí puedes añadir lógica adicional según sea necesario,
-        // como almacenar referencias a héroes, asignar estadísticas, etc.
+        // Buscar el ID del jugador propietario - adapta esto según la estructura de tu Hero
+        uint ownerId = 0;
+        
+        // Intentar obtener el ID del propietario de diferentes formas posibles
+        var netIdentity = hero.GetComponent<NetworkIdentity>();
+        if (netIdentity != null && netIdentity.connectionToClient != null)
+        {
+            // Intenta obtener el NetId del jugador propietario
+            var playerIdentity = netIdentity.connectionToClient.identity;
+            if (playerIdentity != null)
+            {
+                ownerId = playerIdentity.netId;
+                Debug.LogError($"Se encontró ownerId utilizando connectionToClient: {ownerId}");
+            }
+        }
+        
+        // Si no se pudo obtener de esa forma, intentar con el NetId del propio héroe
+        if (ownerId == 0 && netIdentity != null)
+        {
+            ownerId = netIdentity.netId;
+            Debug.LogError($"Usando netId del héroe como fallback: {ownerId}");
+        }
+        
+        // Si encontramos un ID, buscar la selección correspondiente
+        if (ownerId != 0 && _heroSelections.TryGetValue(ownerId, out string heroId))
+        {
+            Debug.LogError($"Encontrado heroId {heroId} para jugador {ownerId}");
+            
+            // Intentar configurar el héroe según el tipo seleccionado
+            try 
+            {
+                // Verificar si el héroe tiene un método para establecer su tipo
+                var setHeroTypeMethod = hero.GetType().GetMethod("SetHeroType");
+                if (setHeroTypeMethod != null)
+                {
+                    setHeroTypeMethod.Invoke(hero, new object[] { heroId });
+                    Debug.LogError($"Configurado héroe usando método SetHeroType");
+                }
+                // O si tiene una propiedad HeroId o similar
+                else 
+                {
+                    var heroIdProperty = hero.GetType().GetProperty("HeroId") ?? 
+                                        hero.GetType().GetProperty("HeroType") ?? 
+                                        hero.GetType().GetProperty("Type");
+                    
+                    if (heroIdProperty != null && heroIdProperty.CanWrite)
+                    {
+                        heroIdProperty.SetValue(hero, heroId);
+                        Debug.LogError($"Configurado héroe usando propiedad {heroIdProperty.Name}");
+                    }
+                    else
+                    {
+                        Debug.LogError("No se encontró método o propiedad para configurar el tipo de héroe");
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Error al configurar héroe: {ex.Message}");
+            }
+        }
+        else
+        {
+            Debug.LogError($"No se encontró heroId para jugador {ownerId}");
+        }
     }
     else
     {
         Debug.LogError("[GameManager] OnHeroCreated called with null hero");
     }
 }
+        
         // Método para forzar verificación de la configuración
         public void VerifyNetworkSettings() 
         {
@@ -704,6 +831,18 @@ public void OnHeroCreated(EpochLegends.Core.Hero.Hero hero)
             else
             {
                 Debug.LogError("NetworkManager.singleton es NULL!");
+            }
+            
+            // Verificar jugadores
+            foreach (var player in _connectedPlayers)
+            {
+                Debug.LogError($"Jugador {player.Key}: Ready={player.Value.IsReady}, Team={player.Value.TeamId}, Hero={player.Value.SelectedHeroId}");
+            }
+            
+            // Verificar selecciones guardadas
+            foreach (var selection in _heroSelections)
+            {
+                Debug.LogError($"Selección guardada: Jugador {selection.Key} -> Héroe {selection.Value}");
             }
         }
     }

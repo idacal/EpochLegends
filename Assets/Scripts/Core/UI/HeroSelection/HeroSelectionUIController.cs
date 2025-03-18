@@ -917,27 +917,69 @@ namespace EpochLegends.UI.HeroSelection
             Debug.LogError("Actualización de UI completada");
         }
         
-        // Método para depuración
+        // Método mejorado para depuración
         private Dictionary<uint, string> DeserializeAndLogHeroSelections()
         {
+            if (selectionManager == null) {
+                Debug.LogError("¡SelectionManager es null al intentar deserializar selecciones!");
+                return new Dictionary<uint, string>();
+            }
+            
             // Este es un método solo para depuración que expone los datos
             Dictionary<uint, string> selections = new Dictionary<uint, string>();
             
-            for (uint i = 0; i < 1000; i++)
+            // Sólo revisar los jugadores que realmente están conectados
+            var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
+            if (connectedPlayers == null) {
+                Debug.LogError("No se pueden obtener jugadores conectados del GameManager");
+                return selections;
+            }
+            
+            foreach (var player in connectedPlayers.Keys)
             {
-                string heroId = selectionManager.GetSelectedHero(i);
+                uint playerNetId = player;
+                string heroId = selectionManager.GetSelectedHero(playerNetId);
+                
                 if (!string.IsNullOrEmpty(heroId))
                 {
-                    selections[i] = heroId;
+                    selections[playerNetId] = heroId;
                     
                     // Verificar si se muestra en la UI
-                    if (playerSelections.TryGetValue(i, out PlayerSelectionDisplay display))
+                    if (playerSelections.TryGetValue(playerNetId, out PlayerSelectionDisplay display))
                     {
-                        Debug.LogError($"Jugador {i} tiene display, héroe actual: {display.GetSelectedHero()?.HeroId ?? "ninguno"}");
+                        Debug.LogError($"Jugador {playerNetId} tiene display, héroe actual: {display.GetSelectedHero()?.HeroId ?? "ninguno"}");
                     }
                     else
                     {
-                        Debug.LogError($"Jugador {i} NO tiene display en UI");
+                        Debug.LogError($"Jugador {playerNetId} NO tiene display en UI - creando...");
+                        
+                        // Intentar crear el display que falta
+                        string playerName = "Player " + playerNetId;
+                        int teamId = 1; // Valor por defecto
+                        
+                        // Intentar obtener el equipo real del jugador
+                        if (connectedPlayers.TryGetValue(playerNetId, out EpochLegends.PlayerInfo playerInfo)) {
+                            teamId = playerInfo.TeamId;
+                        }
+                        
+                        // Determinar si es el jugador local
+                        bool isLocalPlayer = (NetworkClient.localPlayer != null && 
+                                            NetworkClient.localPlayer.netId == playerNetId);
+                        
+                        // Obtener la definición del héroe
+                        HeroDefinition hero = null;
+                        if (heroRegistry != null) {
+                            hero = heroRegistry.GetHeroById(heroId);
+                        }
+                        
+                        // Crear el display manualmente
+                        CreatePlayerSelectionDisplay(
+                            playerNetId,
+                            playerName,
+                            teamId,
+                            heroId,
+                            isLocalPlayer
+                        );
                     }
                 }
             }

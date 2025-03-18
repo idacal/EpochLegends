@@ -173,30 +173,85 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Server]
         private void HandleTimeExpired()
         {
-            Debug.LogError("=== TIEMPO EXPIRADO ===");
-            Debug.LogError($"Jugadores seleccionados: {selectedHeroes.Count}, Jugadores listos: {readyPlayers.Count}");
-            
-            // Añadir más información de diagnóstico
-            foreach (var conn in NetworkServer.connections)
+            try
             {
-                if (conn.Value != null && conn.Value.identity != null)
+                Debug.LogError("=== TIEMPO EXPIRADO ===");
+                Debug.LogError($"Jugadores seleccionados: {selectedHeroes.Count}, Jugadores listos: {readyPlayers.Count}");
+                
+                // Añadir más información de diagnóstico
+                foreach (var conn in NetworkServer.connections)
                 {
-                    uint netId = conn.Value.identity.netId;
-                    bool hasSelectedHero = selectedHeroes.ContainsKey(netId);
-                    bool isReady = readyPlayers.ContainsKey(netId) && readyPlayers[netId];
-                    
-                    Debug.LogError($"Jugador {netId}: Seleccionó héroe: {hasSelectedHero}, Está listo: {isReady}");
+                    if (conn.Value != null && conn.Value.identity != null)
+                    {
+                        uint netId = conn.Value.identity.netId;
+                        bool hasSelectedHero = selectedHeroes.ContainsKey(netId);
+                        bool isReady = readyPlayers.ContainsKey(netId) && readyPlayers[netId];
+                        
+                        Debug.LogError($"Jugador {netId}: Seleccionó héroe: {hasSelectedHero}, Está listo: {isReady}");
+                    }
+                }
+                
+                // Asegurar que todos los jugadores tengan una selección
+                if (randomIfNotSelected)
+                {
+                    try
+                    {
+                        Debug.LogError("Asignando héroes aleatorios a jugadores no listos...");
+                        AssignRandomHeroesToNonReadyPlayers();
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogError($"Error al asignar héroes aleatorios: {ex.Message}");
+                        // Continuar a pesar del error
+                    }
+                }
+                
+                // Verificar si tenemos suficientes jugadores para iniciar
+                int readyPlayerCount = 0;
+                foreach (var entry in readyPlayers)
+                {
+                    if (entry.Value) readyPlayerCount++;
+                }
+                
+                if (readyPlayerCount < 2)
+                {
+                    Debug.LogError("No hay suficientes jugadores listos para iniciar el juego");
+                    // Si no hay suficientes jugadores, mostrar mensaje pero aún así continuar
+                    RpcNotifyInsufficientPlayers();
+                }
+                
+                // Completar selección de todas formas (para evitar quedarse atascado)
+                Debug.LogError("Completando fase de selección a pesar de los problemas...");
+                CompleteHeroSelection();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Error crítico en HandleTimeExpired: {ex.Message}\n{ex.StackTrace}");
+                
+                // Intento de recuperación - forzar cambio de escena directamente
+                try
+                {
+                    Debug.LogError("Intentando recuperación forzando cambio de escena...");
+                    ForceSceneChange();
+                }
+                catch (System.Exception innerEx)
+                {
+                    Debug.LogError($"Error en intento de recuperación: {innerEx.Message}");
                 }
             }
+        }
+        
+        [ClientRpc]
+        private void RpcNotifyInsufficientPlayers()
+        {
+            Debug.LogWarning("No hay suficientes jugadores listos, pero el juego continuará");
             
-            // Time's up, ensure all players have selections
-            if (randomIfNotSelected)
+            // Podrías mostrar un mensaje en la UI aquí
+            var uiController = FindObjectOfType<EpochLegends.UI.HeroSelection.HeroSelectionUIController>();
+            if (uiController != null)
             {
-                AssignRandomHeroesToNonReadyPlayers();
+                // Mostrar mensaje en UI si tienes algún método para ello
             }
-            
-            // Complete selection phase
-            CompleteHeroSelection();
         }
         
         [Server]
@@ -538,41 +593,180 @@ namespace EpochLegends.Core.HeroSelection.Manager
             }
         }
         
-       // No añadas un nuevo método ForceSceneChange, en su lugar modifica el existente
-// Busca en el archivo HeroSelectionManager.cs el método ForceSceneChange existente
-// y reemplázalo con esta implementación:
-
-[Server]
-public void ForceSceneChange()
-{
-    Debug.LogError("=== FORZANDO CAMBIO DE ESCENA DESDE HERO SELECTION ===");
-    
-    // Obtener la referencia al NetworkManager y usar el método existente ServerChangeScene
-    if (NetworkManager.singleton != null)
-    {
-        Debug.LogError($"NetworkManager encontrado: {NetworkManager.singleton.GetType().Name}");
-        
-        // Obtener referencia al GameManager
-        EpochLegends.GameManager gameManager = FindObjectOfType<EpochLegends.GameManager>();
-        if (gameManager != null)
+        [Server]
+        public void ForceSceneChange()
         {
-            // Verificar si podemos usar StartGame para una transición más limpia
-            Debug.LogError("Llamando a GameManager.StartGame() para una transición adecuada");
-            gameManager.StartGame();
+            Debug.LogError("=== FORZANDO CAMBIO DE ESCENA DESDE HERO SELECTION ===");
+            
+            // 1. Primero desuscribir eventos para evitar errores de objetos destruidos
+            UnregisterFromEvents();
+            
+            // 2. Almacenar localmente los resultados de selección
+            Dictionary<uint, string> selectionResults = new Dictionary<uint, string>(selectedHeroes);
+            
+            // 3. Obtener la referencia al NetworkManager
+            if (NetworkManager.singleton != null)
+            {
+                Debug.LogError($"NetworkManager encontrado: {NetworkManager.singleton.GetType().Name}");
+                
+                // 4. Buscar GameManager de manera más agresiva
+                EpochLegends.GameManager gameManager = null;
+                
+                // Intentar varias formas de obtener el GameManager
+                gameManager = FindObjectOfType<EpochLegends.GameManager>();
+                
+                if (gameManager == null)
+                {
+                    // Intentar buscar a través de FindObjectsOfType
+                    var allGameManagers = FindObjectsOfType<EpochLegends.GameManager>();
+                    if (allGameManagers.Length > 0)
+                    {
+                        gameManager = allGameManagers[0];
+                        Debug.LogError($"GameManager encontrado usando FindObjectsOfType: {gameManager.name}");
+                    }
+                }
+                
+                if (gameManager == null)
+                {
+                    // Intentar buscar en objetos inactivos
+                    EpochLegends.GameManager[] inactiveManagers = Resources.FindObjectsOfTypeAll<EpochLegends.GameManager>();
+                    if (inactiveManagers.Length > 0)
+                    {
+                        gameManager = inactiveManagers[0];
+                        Debug.LogError($"GameManager encontrado en objetos inactivos: {gameManager.name}");
+                    }
+                }
+                
+                // 5. Si encontramos el GameManager, usarlo para cambiar escena
+                if (gameManager != null)
+                {
+                    // Notificar a los clientes que vamos a cambiar de escena
+                    RpcPrepareForSceneChange();
+                    
+                    // Pequeña espera para dar tiempo a que el RPC se procese
+                    // antes de cambiar la escena
+                    StartCoroutine(DelayedSceneChange(gameManager, selectionResults));
+                }
+                else
+                {
+                    // 6. Si no encontramos el GameManager, cambiar escena directamente
+                    Debug.LogError("GameManager no encontrado. Cambiando escena directamente.");
+                    
+                    // Notificar a los clientes que vamos a cambiar de escena
+                    RpcPrepareForSceneChange();
+                    
+                    // Pequeña espera para dar tiempo a que el RPC se procese
+                    StartCoroutine(DirectSceneChange());
+                }
+            }
+            else
+            {
+                Debug.LogError("NetworkManager.singleton es null");
+            }
         }
-        else
+        
+        // RPC para notificar a los clientes que se va a cambiar de escena
+        [ClientRpc]
+        private void RpcPrepareForSceneChange()
         {
-            // Si no encontramos el GameManager, forzar cambio directamente
-            Debug.LogError("GameManager no encontrado. Cambiando escena directamente.");
-            string gameplayScene = "Gameplay";
-            NetworkManager.singleton.ServerChangeScene(gameplayScene);
+            Debug.LogError("Preparando cambio de escena...");
+            
+            // 1. Desactivar controladores que podrían causar problemas durante la transición
+            var lobbyController = FindObjectOfType<EpochLegends.UI.Lobby.LobbyController>();
+            if (lobbyController != null)
+            {
+                lobbyController.enabled = false;
+            }
+            
+            // 2. Mostrar una UI de carga si está disponible
+            var uiManager = FindObjectOfType<EpochLegends.Core.UI.Manager.UIManager>();
+            if (uiManager != null)
+            {
+                uiManager.ShowPanel(EpochLegends.Core.UI.Manager.UIPanel.Loading);
+            }
+            
+            // 3. Limpiar referencias problemáticas
+            UnregisterFromEvents();
+        }
+        
+        // Coroutina para cambiar escena con un pequeño retraso
+        // Corregir los métodos DelayedSceneChange y DirectSceneChange que tienen problemas con yield en bloques try-catch
+
+// Coroutina para cambiar escena con un pequeño retraso
+private System.Collections.IEnumerator DelayedSceneChange(EpochLegends.GameManager gameManager, Dictionary<uint, string> selectionResults)
+{
+    // Esperar un breve momento para asegurar que los clientes estén preparados
+    yield return new WaitForSeconds(0.5f);
+    
+    Debug.LogError("Enviando resultados de selección al GameManager...");
+    
+    bool success = false;
+    try 
+    {
+        // Primero actualizar GameManager con las selecciones
+        gameManager.OnHeroSelectionComplete(selectionResults);
+        success = true;
+    } 
+    catch (System.Exception ex) 
+    {
+        Debug.LogError($"Error al llamar a GameManager: {ex.Message}\n{ex.StackTrace}");
+        success = false;
+    }
+    
+    if (success)
+    {
+        // La llamada a StartGame debería ser manejada por OnHeroSelectionComplete,
+        // pero por si acaso lo llamamos explícitamente después de un breve retraso
+        yield return new WaitForSeconds(0.5f);
+        
+        try
+        {
+            if (gameManager != null && gameObject != null)
+            {
+                Debug.LogError("Llamando explícitamente a StartGame...");
+                gameManager.StartGame();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error al llamar a StartGame: {ex.Message}\n{ex.StackTrace}");
+            success = false;
         }
     }
-    else
+    
+    // Si hubo error, intentar cambio directo
+    if (!success)
     {
-        Debug.LogError("NetworkManager.singleton es null");
+        StartCoroutine(DirectSceneChange());
     }
 }
+
+// Coroutina para cambio directo de escena como último recurso
+private System.Collections.IEnumerator DirectSceneChange()
+{
+    // Esperar un breve momento
+    yield return new WaitForSeconds(0.5f);
+    
+    Debug.LogError("Realizando cambio directo de escena...");
+    
+    try 
+    {
+        string gameplayScene = "Gameplay";
+        NetworkManager.singleton.ServerChangeScene(gameplayScene);
+    } 
+    catch (System.Exception ex) 
+    {
+        Debug.LogError($"Error al cambiar escena directamente: {ex.Message}");
+    }
+}
+        
+        // Método para desuscribir eventos
+        private void UnregisterFromEvents()
+        {
+            // Desuscribir todos los manejadores de eventos para evitar problemas
+            OnHeroSelected = null;
+            OnSelectionComplete = null;
+        }
         
         #endregion
         
@@ -749,7 +943,7 @@ public void ForceSceneChange()
         }
         
         [Server]
-        private void OnHeroSelectionReceived(NetworkConnection conn, HeroSelectionMessage msg)
+        private void OnHeroSelectionReceived(NetworkConnectionToClient conn, HeroSelectionMessage msg)
         {
             if (!selectionInProgress || conn.identity == null) return;
             
@@ -777,7 +971,7 @@ public void ForceSceneChange()
         }
         
         [Server]
-        private void OnReadyStatusReceived(NetworkConnection conn, ReadyStatusMessage msg)
+        private void OnReadyStatusReceived(NetworkConnectionToClient conn, ReadyStatusMessage msg)
         {
             if (!selectionInProgress || conn.identity == null) return;
             

@@ -474,16 +474,26 @@ namespace EpochLegends
             _currentState = GameState.HeroSelection;
             _stateTimer = heroSelectionTime;
             
-            // Start a countdown using the gameStartCountdown field
-            Debug.Log($"Hero selection starting in {gameStartCountdown} seconds");
-            
-            // Notify all clients about the state change
+            // Notificar a los clientes sobre el cambio de estado
             RpcGameStateChanged(_currentState);
             
-            // Load hero selection scene on all clients
+            Debug.Log("Starting hero selection phase with delay");
+            
+            // Añadir un retraso antes de cambiar la escena
+            StartCoroutine(DelayedSceneChange());
+        }
+
+        // Añade este nuevo método
+        [Server]
+        private System.Collections.IEnumerator DelayedSceneChange()
+        {
+            // Esperar para dar tiempo a los clientes a prepararse
+            yield return new WaitForSeconds(1.0f);
+            
+            // Cambiar a la escena de selección de héroes
             NetworkManager.singleton.ServerChangeScene(heroSelectionScene);
-                
-            Debug.Log("Starting hero selection phase");
+            
+            Debug.Log("Changed to hero selection scene");
         }
 
         [Server]

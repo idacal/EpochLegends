@@ -80,54 +80,84 @@ namespace EpochLegends.UI.HeroSelection
         
         private void FindManagers()
         {
-            // Intentar encontrar los managers a través del ManagersController primero
-            var managersController = FindObjectOfType<EpochLegends.Core.ManagersController>();
-            
-            if (managersController != null)
-            {
-                selectionManager = managersController.GetManager<HeroSelectionManager>("HeroSelectionManager");
-                heroRegistry = managersController.GetManager<HeroRegistry>("HeroRegistry");
+            try {
+                // Intentar encontrar los managers a través del ManagersController primero
+                var managersController = FindObjectOfType<EpochLegends.Core.ManagersController>();
                 
-                if (selectionManager == null || heroRegistry == null)
+                if (managersController != null)
                 {
-                    // Intentar búsqueda directa si no los encontramos en el controller
+                    selectionManager = managersController.GetManager<HeroSelectionManager>("HeroSelectionManager");
+                    heroRegistry = managersController.GetManager<HeroRegistry>("HeroRegistry");
+                    
+                    if (selectionManager == null || heroRegistry == null)
+                    {
+                        // Intentar búsqueda directa si no los encontramos en el controller
+                        selectionManager = FindObjectOfType<HeroSelectionManager>();
+                        heroRegistry = FindObjectOfType<HeroRegistry>();
+                    }
+                }
+                else
+                {
+                    // Búsqueda directa si no hay ManagersController
                     selectionManager = FindObjectOfType<HeroSelectionManager>();
                     heroRegistry = FindObjectOfType<HeroRegistry>();
                 }
+                
+                // Verificar si se encontraron ambos managers
+                managersFound = (selectionManager != null && heroRegistry != null);
+                
+                Debug.Log($"[HeroSelectionUIController] Team Manager found: {selectionManager != null}, Hero Registry found: {heroRegistry != null}");
+                
+                if (managersFound)
+                {
+                    Debug.Log("[HeroSelectionUIController] Managers found successfully");
+                }
+                else
+                {
+                    Debug.LogWarning("[HeroSelectionUIController] Required managers not found in scene!");
+                }
             }
-            else
-            {
-                // Búsqueda directa si no hay ManagersController
-                selectionManager = FindObjectOfType<HeroSelectionManager>();
-                heroRegistry = FindObjectOfType<HeroRegistry>();
-            }
-            
-            // Verificar si se encontraron ambos managers
-            managersFound = (selectionManager != null && heroRegistry != null);
-            
-            if (managersFound)
-            {
-                Debug.Log("[HeroSelectionUIController] Managers found successfully");
-            }
-            else
-            {
-                Debug.LogWarning("[HeroSelectionUIController] Required managers not found in scene!");
+            catch (System.Exception ex) {
+                Debug.LogError($"[HeroSelectionUIController] Error finding managers: {ex.Message}");
             }
         }
         
         private IEnumerator FindManagersWithDelay()
         {
-            // Intentar encontrar los managers varias veces con retrasos
-            for (int attempt = 0; attempt < 5; attempt++)
+            Debug.Log("[HeroSelectionUIController] Comenzando búsqueda de managers con retraso...");
+            
+            // Intentar encontrar los managers varias veces con retrasos mayores
+            for (int attempt = 0; attempt < 10; attempt++)
             {
-                // Esperar un momento antes de intentar de nuevo
-                yield return new WaitForSeconds(0.5f);
+                // Esperar más tiempo entre intentos
+                yield return new WaitForSeconds(1.0f);
                 
-                FindManagers();
+                Debug.Log($"[HeroSelectionUIController] Intento #{attempt+1} de encontrar managers...");
+                
+                // Buscar primero a través del ManagersController
+                var managersController = FindObjectOfType<EpochLegends.Core.ManagersController>();
+                
+                if (managersController != null)
+                {
+                    Debug.Log("[HeroSelectionUIController] ManagersController encontrado, buscando managers específicos...");
+                    selectionManager = managersController.GetManager<HeroSelectionManager>();
+                    heroRegistry = managersController.GetManager<HeroRegistry>();
+                }
+                
+                // Si no se encontraron ambos managers, buscar directamente
+                if (selectionManager == null || heroRegistry == null)
+                {
+                    Debug.Log("[HeroSelectionUIController] Buscando managers directamente en la escena...");
+                    selectionManager = FindObjectOfType<HeroSelectionManager>();
+                    heroRegistry = FindObjectOfType<HeroRegistry>();
+                }
+                
+                // Verificar si se encontraron
+                managersFound = (selectionManager != null && heroRegistry != null);
                 
                 if (managersFound)
                 {
-                    Debug.Log($"[HeroSelectionUIController] Managers found after {attempt+1} attempts");
+                    Debug.Log($"[HeroSelectionUIController] ¡Managers encontrados después de {attempt+1} intentos!");
                     
                     // Inicializar la UI ahora que tenemos los managers
                     if (isActiveAndEnabled)
@@ -146,7 +176,10 @@ namespace EpochLegends.UI.HeroSelection
             
             if (!managersFound)
             {
-                Debug.LogError("[HeroSelectionUIController] Failed to find managers after multiple attempts!");
+                Debug.LogError("[HeroSelectionUIController] ¡No se pudieron encontrar los managers después de múltiples intentos!");
+                Debug.LogError("Intentando crear managers temporales...");
+                
+                // NOTA: Aquí podríamos intentar crear managers temporales si es necesario
             }
         }
         
@@ -177,6 +210,22 @@ namespace EpochLegends.UI.HeroSelection
                 PopulateHeroGrid();
                 InitializePlayerSelections();
             }
+            else
+            {
+                // Si no encontramos los managers, intentar con un retraso adicional
+                StartCoroutine(DelayedRegistration());
+            }
+        }
+        
+        private IEnumerator DelayedRegistration()
+        {
+            yield return new WaitForSeconds(2.0f);
+            
+            // Registrarse para eventos
+            HeroSelectionManager.OnHeroSelected += OnHeroSelected;
+            HeroSelectionManager.OnSelectionComplete += OnSelectionComplete;
+            
+            Debug.Log("[HeroSelectionUIController] Registro de eventos completado con retraso");
         }
         
         private void OnDestroy()

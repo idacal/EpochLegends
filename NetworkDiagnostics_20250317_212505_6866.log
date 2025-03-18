@@ -1,0 +1,39 @@
+=== Network Diagnostics Started at 17-03-2025 21:25:05 ===
+Active Scene: MainMenu
+Network Mode: Client
+[21:25:05.992] NetworkDiagnostics initialized at 17-03-2025 21:25:05
+[21:25:06.115] CLIENT SCENE CHANGED: Lobby
+[21:25:06.575] CLIENT SPAWN: TeamAssignment, NetID: 1, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[21:25:06.576] CLIENT SPAWN: HeroSelectionManager, NetID: 2, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[21:25:06.576] CLIENT SPAWN: GameManager, NetID: 3, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[21:25:06.576] CLIENT SPAWN: TeamManager, NetID: 4, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[21:25:06.577] CLIENT SPAWN: HeroRegistry, NetID: 5, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[21:25:06.578] CLIENT SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[21:25:06.578] CLIENT SPAWN: temp_player(Clone), NetID: 7, SceneID: 0, AssetID: 1462839937
+[21:25:06.578] CLIENT SPAWN: temp_player(Clone), NetID: 8, SceneID: 0, AssetID: 1462839937
+[21:25:09.546] CLIENT SCENE CHANGED: HeroSelection
+[21:25:09.756] CLIENT SPAWN: temp_player(Clone), NetID: 13, SceneID: 0, AssetID: 1462839937
+[21:25:09.756] CLIENT SPAWN: temp_player(Clone), NetID: 12, SceneID: 0, AssetID: 1462839937
+[21:25:09.756] CLIENT SPAWN: HeroSelectionManager, NetID: 9, SceneID: 7442F4A30C7F5961, AssetID: 4181262340
+[21:25:09.757] CLIENT SPAWN: HeroSelectionCanvas, NetID: 11, SceneID: 7442F4A325BB41ED, AssetID: 0
+[21:25:09.757] CLIENT UNSPAWN: TeamAssignment, NetID: 1
+[21:25:09.757] CLIENT UNSPAWN: HeroSelectionManager, NetID: 2
+[21:25:09.757] CLIENT UNSPAWN: GameManager, NetID: 3
+[21:25:09.757] CLIENT UNSPAWN: TeamManager, NetID: 4
+[21:25:09.757] CLIENT UNSPAWN: HeroRegistry, NetID: 5
+[21:25:09.758] CLIENT UNSPAWN: LobbyManager, NetID: 6
+[21:25:09.758] CLIENT UNSPAWN: temp_player(Clone), NetID: 7
+[21:25:09.758] CLIENT UNSPAWN: temp_player(Clone), NetID: 8
+[21:29:18.547] === NETWORK PREFAB DIAGNOSTICS ===
+Network Manager: Network Manager
+Registered Spawn Prefabs: 0
+
+Registered Prefabs:
+
+Current Spawned Objects:
+
+Statistics:
+- Total Spawns Detected: 0
+- Failed Spawns: 0
+
+=== Network Diagnostics Stopped at 17-03-2025 21:34:49 ===

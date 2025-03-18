@@ -64,11 +64,37 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Register for network callbacks
             NetworkServer.RegisterHandler<HeroSelectionMessage>(OnHeroSelectionReceived);
             NetworkServer.RegisterHandler<ReadyStatusMessage>(OnReadyStatusReceived);
+            
+            // Delay initialization to let clients finish loading
+            StartCoroutine(DelayedInitialization(1.0f));
+        }
+        
+        private System.Collections.IEnumerator DelayedInitialization(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            
+            // Now perform any server-side spawning
+            Debug.Log("[HeroSelectionManager] Performing delayed initialization");
+            
+            // Initialize any network objects here
+            // ...
         }
         
         public override void OnStartClient()
         {
             base.OnStartClient();
+            
+            Debug.Log("[HeroSelectionManager] Cliente iniciado en escena " + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            
+            // Verificar que estamos en la escena correcta
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("HeroSelection"))
+            {
+                Debug.Log("[HeroSelectionManager] En escena de selección de héroe");
+            }
+            else
+            {
+                Debug.LogWarning("[HeroSelectionManager] No estamos en la escena de selección de héroe!");
+            }
             
             // Initial deserialization of dictionaries
             DeserializeSelectedHeroes();
@@ -693,7 +719,5 @@ namespace EpochLegends.Core.HeroSelection.Manager
         }
         
         #endregion
-    }
-
-    
+    }  
 }

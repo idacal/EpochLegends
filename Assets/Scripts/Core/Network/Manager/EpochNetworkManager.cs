@@ -164,7 +164,26 @@ namespace EpochLegends.Core.Network.Manager
             base.OnStartClient();
             
             // Verificar prefabs registrados en el cliente
-            Debug.Log($"Client starting with {spawnPrefabs.Count} registered prefabs");
+            Debug.Log($"[EpochNetworkManager] Cliente iniciado con {spawnPrefabs.Count} prefabs registrados:");
+            foreach (var prefab in spawnPrefabs)
+            {
+                if (prefab != null)
+                {
+                    NetworkIdentity identity = prefab.GetComponent<NetworkIdentity>();
+                    if (identity != null)
+                    {
+                        Debug.Log($"- {prefab.name} (assetId: {identity.assetId})");
+                    }
+                    else
+                    {
+                        Debug.LogError($"- ERROR: {prefab.name} no tiene componente NetworkIdentity!");
+                    }
+                }
+                else
+                {
+                    Debug.LogError("- ERROR: Prefab NULO en la lista de spawnPrefabs!");
+                }
+            }
             
             // Buscar componente de diagnóstico de red
             EpochLegends.Utils.Debug.NetworkDiagnostics diagnostics = 

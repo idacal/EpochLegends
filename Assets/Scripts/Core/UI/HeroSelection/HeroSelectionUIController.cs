@@ -234,13 +234,23 @@ namespace EpochLegends.UI.HeroSelection
             UnregisterFromEvents();
         }
         
-        private void Update()
-        {
-            if (!managersFound) return;
-            
-            // Update timer display
-            UpdateTimer();
-        }
+private void Update()
+{
+    if (!managersFound) 
+    {
+        Debug.LogWarning("[HeroSelectionUIController] Update skipped - managers not found");
+        return;
+    }
+    
+    if (selectionManager == null)
+    {
+        Debug.LogWarning("[HeroSelectionUIController] Update skipped - selectionManager is null");
+        return;
+    }
+    
+    // Update timer display
+    UpdateTimer();
+}
         
         #region UI Initialization
         
@@ -604,10 +614,11 @@ namespace EpochLegends.UI.HeroSelection
         
         private void UpdateTimer()
         {
-            if (!managersFound || timerText == null || selectionManager == null) return;
-            
-            float remainingTime = selectionManager.GetRemainingTime();
-            timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
+                if (!managersFound || timerText == null || selectionManager == null) return;
+    
+    float remainingTime = selectionManager.GetRemainingTime();
+    Debug.Log($"[HeroSelectionUIController] Timer remaining time: {remainingTime}");
+    timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
             
             // Play tick sound on each second change when time is low
             int currentSecond = Mathf.CeilToInt(remainingTime);

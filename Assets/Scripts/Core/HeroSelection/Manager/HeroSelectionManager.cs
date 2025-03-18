@@ -76,8 +76,8 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Now perform any server-side spawning
             Debug.Log("[HeroSelectionManager] Performing delayed initialization");
             
-            // Initialize any network objects here
-            // ...
+            // Start the hero selection automatically after initialization
+            StartHeroSelection();
         }
         
         public override void OnStartClient()
@@ -110,6 +110,9 @@ namespace EpochLegends.Core.HeroSelection.Manager
         {
             if (isServer && selectionInProgress)
             {
+                // Debug para confirmar que el timer se está actualizando en el servidor
+                Debug.Log($"[HeroSelectionManager] Server timer: {remainingTime:F1}");
+                
                 // Update timer
                 remainingTime -= Time.deltaTime;
                 
@@ -147,7 +150,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Notify clients
             RpcHeroSelectionStarted(selectionTime);
             
-            Debug.Log("Hero selection phase started");
+            Debug.Log("[HeroSelectionManager] Hero selection phase started with time: " + selectionTime);
         }
         
         [Server]
@@ -568,7 +571,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Inform UI about time
             remainingTime = time;
             
-            Debug.Log("Hero selection started");
+            Debug.Log($"[HeroSelectionManager] Hero selection started with time: {time}");
         }
         
         [ClientRpc]
@@ -629,7 +632,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
         private void OnTimerChanged(float oldValue, float newValue)
         {
             // Update UI with new timer value
-            Debug.Log($"Selection timer: {newValue:F1} seconds");
+            Debug.Log($"[HeroSelectionManager] Selection timer sync: {newValue:F1} seconds");
         }
         
         #endregion
@@ -667,6 +670,8 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public float GetRemainingTime()
         {
+            // Añadir un log para depurar el valor del tiempo que se está devolviendo
+            Debug.Log($"[HeroSelectionManager] GetRemainingTime called, returning: {remainingTime:F1}");
             return remainingTime;
         }
         
@@ -716,6 +721,34 @@ namespace EpochLegends.Core.HeroSelection.Manager
             }
             
             return false;
+        }
+        
+        // Método de utilidad para forzar el inicio de la selección (para pruebas)
+        [Client]
+        public void RequestStartHeroSelection()
+        {
+            if (isServer)
+            {
+                Debug.Log("[HeroSelectionManager] Server starting hero selection (requested by client)");
+                StartHeroSelection();
+            }
+            else
+            {
+                Debug.Log("[HeroSelectionManager] Client requesting hero selection start - feature not implemented");
+                // Aquí se podría implementar un mensaje al servidor para iniciar la selección
+            }
+        }
+        
+        // Método para iniciar manualmente el temporizador (para debugging)
+        [Client]
+        public void ForceTimerStart(float initialTime = 60f)
+        {
+            Debug.Log($"[HeroSelectionManager] Forzando inicio de temporizador: {initialTime}s");
+            if (isServer)
+            {
+                remainingTime = initialTime;
+                selectionInProgress = true;
+            }
         }
         
         #endregion

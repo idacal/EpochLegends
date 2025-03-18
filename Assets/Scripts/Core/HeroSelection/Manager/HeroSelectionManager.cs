@@ -21,6 +21,9 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [SerializeField] private HeroRegistry heroRegistry;
         [SerializeField] private TeamManager teamManager;
         
+        [Header("Debug")]
+        [SerializeField] private bool debugMode = true;
+        
         // Synced state
         [SyncVar(hook = nameof(OnTimerChanged))]
         private float remainingTime = 60f;
@@ -28,12 +31,13 @@ namespace EpochLegends.Core.HeroSelection.Manager
         // Selection tracking using standard dictionaries for server-side logic
         private readonly Dictionary<uint, string> selectedHeroes = new Dictionary<uint, string>();
         private readonly Dictionary<uint, bool> readyPlayers = new Dictionary<uint, bool>();
+        private readonly Dictionary<NetworkConnection, uint> _connectionToNetId = new Dictionary<NetworkConnection, uint>();
         
         // SyncVars for client display
-        [SyncVar]
+        [SyncVar(hook = nameof(OnSelectedHeroesJsonChanged))]
         private string syncSelectedHeroesJson = "{}";
         
-        [SyncVar]
+        [SyncVar(hook = nameof(OnReadyPlayersJsonChanged))]
         private string syncReadyPlayersJson = "{}";
         
         // Private state
@@ -56,6 +60,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Initialize
             selectedHeroes.Clear();
             readyPlayers.Clear();
+            _connectionToNetId.Clear();
             
             // Find references if not set
             if (heroRegistry == null) heroRegistry = FindObjectOfType<HeroRegistry>();
@@ -64,6 +69,15 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Register for network callbacks
             NetworkServer.RegisterHandler<HeroSelectionMessage>(OnHeroSelectionReceived);
             NetworkServer.RegisterHandler<ReadyStatusMessage>(OnReadyStatusReceived);
+            
+            // Initialize connection to netId mapping
+            foreach (var conn in NetworkServer.connections.Values)
+            {
+                if (conn != null && conn.identity != null)
+                {
+                    _connectionToNetId[conn] = conn.identity.netId;
+                }
+            }
             
             // Delay initialization to let clients finish loading
             StartCoroutine(DelayedInitialization(1.0f));
@@ -111,7 +125,10 @@ namespace EpochLegends.Core.HeroSelection.Manager
             if (isServer && selectionInProgress)
             {
                 // Debug para confirmar que el timer se está actualizando en el servidor
-                Debug.Log($"[HeroSelectionManager] Server timer: {remainingTime:F1}");
+                if (debugMode && Time.frameCount % 60 == 0) // Limitar logs para 1 vez por segundo aprox.
+                {
+                    Debug.Log($"[HeroSelectionManager] Server timer: {remainingTime:F1}");
+                }
                 
                 // Update timer
                 remainingTime -= Time.deltaTime;
@@ -156,6 +173,22 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Server]
         private void HandleTimeExpired()
         {
+            Debug.LogError("=== TIEMPO EXPIRADO ===");
+            Debug.LogError($"Jugadores seleccionados: {selectedHeroes.Count}, Jugadores listos: {readyPlayers.Count}");
+            
+            // Añadir más información de diagnóstico
+            foreach (var conn in NetworkServer.connections)
+            {
+                if (conn.Value != null && conn.Value.identity != null)
+                {
+                    uint netId = conn.Value.identity.netId;
+                    bool hasSelectedHero = selectedHeroes.ContainsKey(netId);
+                    bool isReady = readyPlayers.ContainsKey(netId) && readyPlayers[netId];
+                    
+                    Debug.LogError($"Jugador {netId}: Seleccionó héroe: {hasSelectedHero}, Está listo: {isReady}");
+                }
+            }
+            
             // Time's up, ensure all players have selections
             if (randomIfNotSelected)
             {
@@ -180,22 +213,43 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Server]
         private void CompleteHeroSelection()
         {
+            Debug.LogError("=== COMPLETANDO SELECCIÓN DE HÉROES ===");
             selectionInProgress = false;
             
             // Notify clients
             RpcHeroSelectionComplete();
             
             // Trigger event
-            OnSelectionComplete?.Invoke();
+            if (OnSelectionComplete != null)
+            {
+                Debug.LogError("Invocando evento OnSelectionComplete");
+                OnSelectionComplete.Invoke();
+            }
+            else
+            {
+                Debug.LogError("ALERTA: OnSelectionComplete es null!");
+            }
             
             // Notify game manager to transition to next phase
             EpochLegends.GameManager gameManager = FindObjectOfType<EpochLegends.GameManager>();
             if (gameManager != null)
             {
+                Debug.LogError("Llamando a GameManager.OnHeroSelectionComplete");
                 gameManager.OnHeroSelectionComplete(GetSelectionResults());
             }
+            else
+            {
+                Debug.LogError("ALERTA: GameManager no encontrado!");
+                
+                // Intentar cargar la escena directamente como último recurso
+                if (NetworkManager.singleton != null)
+                {
+                    Debug.LogError("Intentando cambiar la escena directamente...");
+                    NetworkManager.singleton.ServerChangeScene("Gameplay");
+                }
+            }
             
-            Debug.Log("Hero selection phase completed");
+            Debug.LogError("Hero selection phase completed");
         }
         
         [Server]
@@ -226,15 +280,20 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Server]
         private void SelectHero(uint playerNetId, string heroId)
         {
+            Debug.LogError($"=== SERVIDOR: Seleccionando héroe {heroId} para jugador {playerNetId} ===");
+            
             // Validate hero selection
             if (!IsHeroAvailable(heroId, playerNetId))
             {
+                Debug.LogError($"Héroe {heroId} no disponible para jugador {playerNetId}");
+                
                 // If enforcing unique picks and this hero is already taken, pick another
                 if (enforceUniquePicks)
                 {
                     string alternateHero = GetRandomAvailableHero();
                     if (!string.IsNullOrEmpty(alternateHero))
                     {
+                        Debug.LogError($"Asignando héroe alternativo: {alternateHero}");
                         heroId = alternateHero;
                     }
                 }
@@ -246,26 +305,56 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // Update synced JSON
             SerializeSelectedHeroes();
             
-            // Trigger event locally and send to clients
-            OnHeroSelected?.Invoke(playerNetId, heroId);
+            // Enviar RPC directamente además de usar SyncVar para mayor fiabilidad
             RpcHeroSelected(playerNetId, heroId);
             
-            Debug.Log($"Player {playerNetId} selected hero {heroId}");
+            // Trigger event locally
+            Debug.LogError($"Disparando evento OnHeroSelected para jugador {playerNetId} con héroe {heroId}");
+            OnHeroSelected?.Invoke(playerNetId, heroId);
+            
+            Debug.LogError($"Player {playerNetId} selected hero {heroId}");
         }
         
         [Server]
         private void SetPlayerReady(uint playerNetId, bool isReady)
         {
+            Debug.LogError($"=== SERVIDOR: Estableciendo ready={isReady} para jugador {playerNetId} ===");
+            
             // Update ready status
             readyPlayers[playerNetId] = isReady;
             
             // Update synced JSON
             SerializeReadyPlayers();
             
-            // Notify clients
+            // Enviar RPC directamente además de usar SyncVar para mayor fiabilidad
             RpcPlayerReadyChanged(playerNetId, isReady);
             
-            Debug.Log($"Player {playerNetId} ready status set to {isReady}");
+            Debug.LogError($"Player {playerNetId} ready status set to {isReady}");
+            
+            // Depuración adicional
+            string jsonReady = "{}";
+            if (readyPlayers.Count > 0)
+            {
+                jsonReady = "{";
+                bool first = true;
+                foreach (var kvp in readyPlayers)
+                {
+                    if (!first) jsonReady += ",";
+                    jsonReady += $"\"{kvp.Key}\":{kvp.Value.ToString().ToLower()}";
+                    first = false;
+                }
+                jsonReady += "}";
+            }
+            Debug.LogError($"Ready players JSON actual: {jsonReady}");
+            Debug.LogError($"syncReadyPlayersJson: {syncReadyPlayersJson}");
+            
+            // Check if all players are now ready
+            if (isReady && AreAllPlayersReady())
+            {
+                Debug.LogError("Todos los jugadores están listos");
+                allPlayersReady = true;
+                StartSelectionCountdown();
+            }
         }
         
         [Server]
@@ -366,6 +455,161 @@ namespace EpochLegends.Core.HeroSelection.Manager
         {
             // Return a copy of the selected heroes dictionary
             return new Dictionary<uint, string>(selectedHeroes);
+        }
+        
+        [Server]
+        public void OnPlayerDisconnected(NetworkConnection conn)
+        {
+            if (!selectionInProgress) return;
+            
+            if (_connectionToNetId.TryGetValue(conn, out uint netId))
+            {
+                Debug.Log($"[HeroSelectionManager] Player {netId} disconnected during hero selection");
+                
+                // Si la selección está en progreso y el jugador estaba listo,
+                // podríamos considerar mantener su selección
+                if (readyPlayers.TryGetValue(netId, out bool wasReady) && wasReady)
+                {
+                    Debug.Log($"[HeroSelectionManager] Keeping hero selection for disconnected player {netId}");
+                    // Mantener la selección
+                }
+                else
+                {
+                    // Sino, remover su selección y estado
+                    if (selectedHeroes.ContainsKey(netId))
+                        selectedHeroes.Remove(netId);
+                        
+                    if (readyPlayers.ContainsKey(netId))
+                        readyPlayers.Remove(netId);
+                        
+                    // Actualizar JSON sincronizado
+                    SerializeSelectedHeroes();
+                    SerializeReadyPlayers();
+                    
+                    Debug.Log($"[HeroSelectionManager] Removed hero selection for disconnected player {netId}");
+                }
+                
+                // Eliminar de la lista de conexiones
+                _connectionToNetId.Remove(conn);
+                
+                // Notificar a otros clientes sobre el cambio
+                RpcPlayerDisconnected(netId);
+                
+                // Verificar si aún podemos continuar la partida
+                CheckGameCanProceed();
+            }
+        }
+        
+        [Server]
+        private void CheckGameCanProceed()
+        {
+            // Verificar si aún hay suficientes jugadores para iniciar el juego
+            int playerCount = 0;
+            
+            foreach (NetworkConnection conn in NetworkServer.connections.Values)
+            {
+                if (conn != null && conn.identity != null)
+                {
+                    playerCount++;
+                }
+            }
+            
+            if (playerCount < 2)
+            {
+                Debug.Log("[HeroSelectionManager] Not enough players to continue. Returning to lobby.");
+                // Regresar al lobby si no hay suficientes jugadores
+                CancelHeroSelection();
+            }
+        }
+        
+        [Server]
+        private void CancelHeroSelection()
+        {
+            selectionInProgress = false;
+            
+            // Notificar a los clientes
+            RpcHeroSelectionCancelled();
+            
+            // Notificar al GameManager para volver al lobby
+            EpochLegends.GameManager gameManager = FindObjectOfType<EpochLegends.GameManager>();
+            if (gameManager != null)
+            {
+                gameManager.ReturnToLobby();
+            }
+        }
+        
+       // No añadas un nuevo método ForceSceneChange, en su lugar modifica el existente
+// Busca en el archivo HeroSelectionManager.cs el método ForceSceneChange existente
+// y reemplázalo con esta implementación:
+
+[Server]
+public void ForceSceneChange()
+{
+    Debug.LogError("=== FORZANDO CAMBIO DE ESCENA DESDE HERO SELECTION ===");
+    
+    // Obtener la referencia al NetworkManager y usar el método existente ServerChangeScene
+    if (NetworkManager.singleton != null)
+    {
+        Debug.LogError($"NetworkManager encontrado: {NetworkManager.singleton.GetType().Name}");
+        
+        // Obtener referencia al GameManager
+        EpochLegends.GameManager gameManager = FindObjectOfType<EpochLegends.GameManager>();
+        if (gameManager != null)
+        {
+            // Verificar si podemos usar StartGame para una transición más limpia
+            Debug.LogError("Llamando a GameManager.StartGame() para una transición adecuada");
+            gameManager.StartGame();
+        }
+        else
+        {
+            // Si no encontramos el GameManager, forzar cambio directamente
+            Debug.LogError("GameManager no encontrado. Cambiando escena directamente.");
+            string gameplayScene = "Gameplay";
+            NetworkManager.singleton.ServerChangeScene(gameplayScene);
+        }
+    }
+    else
+    {
+        Debug.LogError("NetworkManager.singleton es null");
+    }
+}
+        
+        #endregion
+        
+        #region SyncVar Hooks
+        
+        private void OnSelectedHeroesJsonChanged(string oldValue, string newValue)
+        {
+            Debug.LogError($"SyncVar selectedHeroes cambió: {newValue}");
+            
+            // Notificar a los clientes para que actualicen la UI
+            if (isClient && !isServer)
+            {
+                Dictionary<uint, string> deserializedSelections = DeserializeSelectedHeroes();
+                
+                foreach (var entry in deserializedSelections)
+                {
+                    Debug.LogError($"Jugador {entry.Key} seleccionó héroe {entry.Value}");
+                    OnHeroSelected?.Invoke(entry.Key, entry.Value);
+                }
+            }
+        }
+        
+        private void OnReadyPlayersJsonChanged(string oldValue, string newValue)
+        {
+            Debug.LogError($"SyncVar readyPlayers cambió: {newValue}");
+            
+            // Notificar a los clientes para que actualicen la UI
+            if (isClient && !isServer)
+            {
+                Dictionary<uint, bool> deserializedReady = DeserializeReadyPlayers();
+                
+                foreach (var entry in deserializedReady)
+                {
+                    Debug.LogError($"Jugador {entry.Key} ready: {entry.Value}");
+                    RpcPlayerReadyChanged(entry.Key, entry.Value);
+                }
+            }
         }
         
         #endregion
@@ -511,6 +755,8 @@ namespace EpochLegends.Core.HeroSelection.Manager
             
             uint playerNetId = conn.identity.netId;
             
+            Debug.Log($"[HeroSelectionManager] Hero selection request received: Player {playerNetId} selected {msg.heroId}");
+            
             // Validate and process hero selection
             if (IsHeroAvailable(msg.heroId, playerNetId))
             {
@@ -518,6 +764,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
             }
             else
             {
+                Debug.Log($"[HeroSelectionManager] Hero {msg.heroId} is not available for player {playerNetId}");
                 // Notify client about invalid selection
                 TargetInvalidSelection(conn, msg.heroId);
             }
@@ -585,19 +832,28 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [ClientRpc]
         private void RpcHeroSelectionComplete()
         {
-            // Hide hero selection UI
+            Debug.LogError("=== CLIENTE: Selección de héroes completada ===");
+            
+            // Verificar escena actual
+            Debug.LogError($"Escena actual: {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}");
+            
+            // Show loading UI
             UIManager uiManager = UIManager.Instance;
             if (uiManager != null)
             {
+                Debug.LogError("Mostrando panel de carga");
                 uiManager.ShowPanel(UIPanel.Loading);
             }
-            
-            Debug.Log("Hero selection completed");
+            else
+            {
+                Debug.LogError("ALERTA: UIManager no encontrado!");
+            }
         }
         
         [ClientRpc]
         private void RpcHeroSelected(uint playerNetId, string heroId)
         {
+            Debug.LogError($"CLIENTE: RpcHeroSelected recibido para jugador {playerNetId} con héroe {heroId}");
             // Trigger hero selected event for UI updates
             OnHeroSelected?.Invoke(playerNetId, heroId);
         }
@@ -606,7 +862,33 @@ namespace EpochLegends.Core.HeroSelection.Manager
         private void RpcPlayerReadyChanged(uint playerNetId, bool isReady)
         {
             // UI would update ready status indicators
-            Debug.Log($"Player {playerNetId} ready status changed to {isReady}");
+            Debug.LogError($"CLIENTE: Player {playerNetId} ready status changed to {isReady}");
+            
+            // Buscar un UIController y forzar actualización directa
+            var uiController = FindObjectOfType<EpochLegends.UI.HeroSelection.HeroSelectionUIController>();
+            if (uiController != null)
+            {
+                Debug.LogError("UIController encontrado, forzando actualización");
+                var method = uiController.GetType().GetMethod("ForceRefreshAllUI");
+                if (method != null)
+                {
+                    method.Invoke(uiController, null);
+                }
+            }
+        }
+        
+        [ClientRpc]
+        private void RpcPlayerDisconnected(uint playerNetId)
+        {
+            Debug.Log($"[HeroSelectionManager] Player {playerNetId} disconnected from hero selection");
+            // La UI debería actualizarse automáticamente con los datos sincronizados
+        }
+        
+        [ClientRpc]
+        private void RpcHeroSelectionCancelled()
+        {
+            Debug.Log("Hero selection has been cancelled due to insufficient players.");
+            // La UI puede mostrar un mensaje aquí
         }
         
         [TargetRpc]
@@ -625,14 +907,36 @@ namespace EpochLegends.Core.HeroSelection.Manager
             // UI could display error message
         }
         
+        [TargetRpc]
+        private void TargetUpdateHeroSelection(NetworkConnection target, uint playerNetId, string heroId)
+        {
+            Debug.LogError($"Recibiendo actualización directa: Jugador {playerNetId} seleccionó héroe {heroId}");
+            OnHeroSelected?.Invoke(playerNetId, heroId);
+        }
+
+        [TargetRpc]
+        private void TargetUpdateReadyState(NetworkConnection target, uint playerNetId, bool isReady)
+        {
+            Debug.LogError($"Recibiendo actualización directa: Jugador {playerNetId} ready={isReady}");
+            // Buscar la UI y actualizar directamente
+            var uiController = FindObjectOfType<EpochLegends.UI.HeroSelection.HeroSelectionUIController>();
+            if (uiController != null)
+            {
+                uiController.ForceRefreshAllUI();
+            }
+        }
+        
         #endregion
         
         #region Sync Hooks
         
         private void OnTimerChanged(float oldValue, float newValue)
         {
-            // Update UI with new timer value
-            Debug.Log($"[HeroSelectionManager] Selection timer sync: {newValue:F1} seconds");
+            // Log solo si hay un cambio significativo o modo debug activado
+            if (debugMode || Mathf.Abs(oldValue - newValue) > 1.0f)
+            {
+                Debug.Log($"[HeroSelectionManager] Selection timer sync: {newValue:F1} seconds");
+            }
         }
         
         #endregion
@@ -642,7 +946,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public void SelectHeroLocally(string heroId)
         {
-            if (!isClientOnly) return;
+            Debug.LogError($"Cliente solicitando selección de héroe: {heroId}");
             
             // Send selection to server
             HeroSelectionMessage msg = new HeroSelectionMessage
@@ -656,7 +960,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public void SetReadyStatus(bool isReady)
         {
-            if (!isClientOnly) return;
+            Debug.LogError($"Cliente estableciendo estado ready: {isReady}");
             
             // Send ready status to server
             ReadyStatusMessage msg = new ReadyStatusMessage
@@ -670,8 +974,11 @@ namespace EpochLegends.Core.HeroSelection.Manager
         [Client]
         public float GetRemainingTime()
         {
-            // Añadir un log para depurar el valor del tiempo que se está devolviendo
-            Debug.Log($"[HeroSelectionManager] GetRemainingTime called, returning: {remainingTime:F1}");
+            // Añadir un log para depurar el valor del tiempo solo si el modo debug está activado
+            if (debugMode)
+            {
+                Debug.Log($"[HeroSelectionManager] GetRemainingTime called, returning: {remainingTime:F1}");
+            }
             return remainingTime;
         }
         
@@ -723,6 +1030,30 @@ namespace EpochLegends.Core.HeroSelection.Manager
             return false;
         }
         
+        [Command(requiresAuthority = false)]
+        public void CmdForceRefreshClientData(NetworkConnectionToClient sender = null)
+        {
+            Debug.LogError($"Cliente {sender.connectionId} solicitó actualización de datos");
+            
+            if (sender != null && sender.identity != null)
+            {
+                uint netId = sender.identity.netId;
+                
+                // Enviar todos los datos actuales al cliente
+                foreach (var selection in selectedHeroes)
+                {
+                    TargetUpdateHeroSelection(sender, selection.Key, selection.Value);
+                }
+                
+                foreach (var readyState in readyPlayers)
+                {
+                    TargetUpdateReadyState(sender, readyState.Key, readyState.Value);
+                }
+                
+                Debug.LogError($"Datos enviados al cliente {netId}");
+            }
+        }
+        
         // Método de utilidad para forzar el inicio de la selección (para pruebas)
         [Client]
         public void RequestStartHeroSelection()
@@ -738,7 +1069,7 @@ namespace EpochLegends.Core.HeroSelection.Manager
                 // Aquí se podría implementar un mensaje al servidor para iniciar la selección
             }
         }
-        
+
         // Método para iniciar manualmente el temporizador (para debugging)
         [Client]
         public void ForceTimerStart(float initialTime = 60f)

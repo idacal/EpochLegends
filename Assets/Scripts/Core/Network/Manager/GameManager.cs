@@ -56,6 +56,9 @@ namespace EpochLegends
         [SerializeField] private string lobbyScene = "Lobby";
         [SerializeField] private string heroSelectionScene = "HeroSelection";
         [SerializeField] private string gameplayScene = "Gameplay";
+        
+        [Header("Debug Settings")]
+        [SerializeField] private bool enableDebugLogs = true;
 
         [SyncVar(hook = nameof(OnGameStateChanged))]
         private GameState _currentState = GameState.Lobby;
@@ -68,9 +71,6 @@ namespace EpochLegends
         
         // Connection to netId mapping (server-side only)
         private Dictionary<NetworkConnection, uint> _connectionToNetId = new Dictionary<NetworkConnection, uint>();
-
-        // Debug flag to track updates
-        private bool _debugNetworkUpdates = true;
 
         public GameState CurrentState => _currentState;
         public int ConnectedPlayerCount => _connectedPlayers.Count;
@@ -102,7 +102,7 @@ namespace EpochLegends
             // ELIMINADO: DontDestroyOnLoad(gameObject);
             // El ManagersController se encargará de preservar este objeto
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Initialized");
         }
         
@@ -116,7 +116,7 @@ namespace EpochLegends
             // Register server-side message handlers
             NetworkServer.RegisterHandler<ReadyStateMessage>(OnReadyStateMessage);
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Server started - registered message handlers");
         }
         
@@ -124,7 +124,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Notifying player data changed");
                 
             OnPlayerDataChanged?.Invoke();
@@ -137,7 +137,7 @@ namespace EpochLegends
             // Register for network manager events
             EpochNetworkManager.OnGameStateUpdated += OnNetworkGameStateUpdated;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Client started");
                 
             // Request full state update when client connects
@@ -152,7 +152,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Game state updated event received");
                 
             // Notify all subscribers that player data has changed
@@ -174,7 +174,7 @@ namespace EpochLegends
             
             if (isClientOnly && NetworkClient.active)
             {
-                if (_debugNetworkUpdates)
+                if (enableDebugLogs)
                     Debug.Log("[GameManager] Client requesting state update from server");
                 
                 // Send request for game state update
@@ -196,6 +196,7 @@ namespace EpochLegends
                     _stateTimer -= Time.deltaTime;
                     if (_stateTimer <= 0f)
                     {
+                        Debug.LogError("[GameManager] Timer de selección de héroes llegó a cero - iniciando juego");
                         StartGame();
                     }
                     break;
@@ -240,7 +241,7 @@ namespace EpochLegends
                 // Add to SyncDictionary to automatically sync to clients
                 _connectedPlayers[netId] = playerInfo;
                 
-                if (_debugNetworkUpdates)
+                if (enableDebugLogs)
                     Debug.Log($"[GameManager] Player joined. NetId: {netId}, Total players: {_connectedPlayers.Count}");
                 
                 // Explicitly notify all clients about the player joining
@@ -268,7 +269,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Received UI refresh command from server");
                 
             NotifyPlayerDataChanged();
@@ -287,7 +288,7 @@ namespace EpochLegends
                     _connectedPlayers.Remove(netId);
                     _connectionToNetId.Remove(conn);
                     
-                    if (_debugNetworkUpdates)
+                    if (enableDebugLogs)
                         Debug.Log($"[GameManager] Player left. NetId: {netId}, Total players: {_connectedPlayers.Count}");
                     
                     // Notify all clients about player leaving
@@ -310,7 +311,7 @@ namespace EpochLegends
                 playerInfo.IsReady = isReady;
                 _connectedPlayers[netId] = playerInfo;
 
-                if (_debugNetworkUpdates)
+                if (enableDebugLogs)
                     Debug.Log($"[GameManager] Player {netId} ready state set to {isReady}");
                 
                 // Notify all clients about player ready state change
@@ -329,7 +330,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log($"[GameManager] Server received ready state: {msg.isReady} from connection {conn.connectionId}");
             
             SetPlayerReady(conn, msg.isReady);
@@ -340,7 +341,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} joined team {teamId}");
                 
             // No need to update dictionary here - it's already synced via SyncDictionary
@@ -355,7 +356,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} left from team {teamId}");
                 
             // No need to update dictionary here - it's already synced via SyncDictionary
@@ -370,7 +371,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log($"[GameManager] RPC: Player {playerNetId} ready state updated to {isReady}");
             
             // No need to update dictionary - it's already synced via SyncDictionary
@@ -385,7 +386,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log($"[GameManager] Sending game state to client {conn}");
                 
             // First send the current game state
@@ -406,7 +407,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
+            if (enableDebugLogs)
                 Debug.Log("[GameManager] Received explicit UI refresh command from server");
             
             // Notify subscribers that player data has changed
@@ -418,8 +419,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
-                Debug.Log($"[GameManager] Game state changed from {oldState} to {newState}");
+            Debug.LogError($"[GameManager] Game state changed from {oldState} to {newState}");
                 
             // Notify subscribers that game state has changed
             if (isClient)
@@ -477,7 +477,7 @@ namespace EpochLegends
             // Notificar a los clientes sobre el cambio de estado
             RpcGameStateChanged(_currentState);
             
-            Debug.Log("Starting hero selection phase with delay");
+            Debug.LogError("Starting hero selection phase with delay");
             
             // Añadir un retraso antes de cambiar la escena
             StartCoroutine(DelayedSceneChange());
@@ -493,7 +493,7 @@ namespace EpochLegends
             // Cambiar a la escena de selección de héroes
             NetworkManager.singleton.ServerChangeScene(heroSelectionScene);
             
-            Debug.Log("Changed to hero selection scene");
+            Debug.LogError("Changed to hero selection scene");
         }
 
         [Server]
@@ -501,15 +501,47 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
+            Debug.LogError("GAMEMANAGER: StartGame llamado");
             _currentState = GameState.Playing;
             
             // Notify all clients about the state change
             RpcGameStateChanged(_currentState);
             
+            // Mostrar información de la escena que vamos a cargar
+            Debug.LogError($"Intentando cambiar a escena: {gameplayScene}");
+            if (string.IsNullOrEmpty(gameplayScene))
+            {
+                Debug.LogError("ERROR: gameplayScene está vacío!");
+                return;
+            }
+            
+            // Mostrar todas las escenas disponibles en el NetworkManager
+            if (NetworkManager.singleton != null && NetworkManager.singleton is Mirror.NetworkManager netManager)
+            {
+                if (netManager.onlineScene != null)
+                    Debug.LogError($"NetworkManager.onlineScene: {netManager.onlineScene}");
+                    
+                // Si la escena no está configurada en NetworkManager, intentar cambiarla manualmente
+                if (string.IsNullOrEmpty(netManager.onlineScene) || !netManager.onlineScene.Contains(gameplayScene))
+                {
+                    Debug.LogError($"La escena {gameplayScene} no está configurada en NetworkManager. Configurando manualmente.");
+                    netManager.onlineScene = gameplayScene;
+                }
+            }
+            else
+            {
+                Debug.LogError("NetworkManager no encontrado o no es de tipo Mirror.NetworkManager");
+            }
+            
             // Load gameplay scene on all clients
-            NetworkManager.singleton.ServerChangeScene(gameplayScene);
-                
-            Debug.Log("Starting gameplay phase");
+            try {
+                NetworkManager.singleton.ServerChangeScene(gameplayScene);
+                Debug.LogError("Solicitud de cambio de escena enviada");
+            } catch (System.Exception ex) {
+                Debug.LogError($"Error al cambiar escena: {ex.Message}\n{ex.StackTrace}");
+            }
+            
+            Debug.LogError("Starting gameplay phase");
         }
 
         [Server]
@@ -540,8 +572,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            if (_debugNetworkUpdates)
-                Debug.Log($"[GameManager] Game state changed to {newState}");
+            Debug.LogError($"[GameManager] Game state changed to {newState}");
                 
             // This RPC explicitly notifies clients about state changes
             // Notify subscribers that game state has changed
@@ -549,10 +580,11 @@ namespace EpochLegends
         }
 
         [Server]
-        private void ReturnToLobby()
+        public void ReturnToLobby()
         {
             if (this == null || !isActiveAndEnabled) return;
             
+            Debug.LogError("[GameManager] ReturnToLobby llamado");
             _currentState = GameState.Lobby;
             
             // Reset player ready status
@@ -569,28 +601,28 @@ namespace EpochLegends
             RpcGameStateChanged(_currentState);
             
             // Load lobby scene on all clients
-            NetworkManager.singleton.ServerChangeScene(lobbyScene);
-                
-            Debug.Log("Returning to lobby");
-        }
-        
-        // Added for compatibility with HeroFactory
-        [Server]
-        public void OnHeroCreated(Hero hero)
-        {
-            if (this == null || !isActiveAndEnabled) return;
+            try {
+                NetworkManager.singleton.ServerChangeScene(lobbyScene);
+                Debug.LogError("Solicitado cambio a escena de lobby");
+            } catch (System.Exception ex) {
+                Debug.LogError($"Error al cambiar a escena de lobby: {ex.Message}");
+            }
             
-            Debug.Log($"Hero created: {hero.name}");
-            // Add any logic needed when a hero is created
+            Debug.LogError("Returning to lobby");
         }
         
-        // Added for compatibility with HeroSelectionManager
         [Server]
         public void OnHeroSelectionComplete(Dictionary<uint, string> selectionResults)
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.Log("Hero selection phase completed");
+            Debug.LogError("GAMEMANAGER: OnHeroSelectionComplete llamado");
+            
+            // Proceso de diagnóstico
+            foreach (var selection in selectionResults)
+            {
+                Debug.LogError($"Procesando selección: Jugador {selection.Key} seleccionó héroe: {selection.Value}");
+            }
             
             // Process the hero selections
             foreach (var selection in selectionResults)
@@ -605,11 +637,74 @@ namespace EpochLegends
                     _connectedPlayers[playerNetId] = playerInfo;
                 }
                 
-                Debug.Log($"Player {playerNetId} selected hero: {heroId}");
+                Debug.LogError($"Jugador {playerNetId} seleccionó héroe: {heroId}");
             }
             
+            // Asegurarse que la escena que queremos cargar existe
+            Debug.LogError($"Intentando cambiar a escena: {gameplayScene}");
+            
             // Transition to next phase
-            StartGame();
+            Debug.LogError("Iniciando juego (StartGame)");
+            try {
+                StartGame();
+            } catch (System.Exception ex) {
+                Debug.LogError($"EXCEPCIÓN al iniciar juego: {ex.Message}\n{ex.StackTrace}");
+                // Intentar cargar la escena de forma directa
+                try {
+                    Debug.LogError("Intentando cargar escena directamente: " + gameplayScene);
+                    NetworkManager.singleton.ServerChangeScene(gameplayScene);
+                } catch (System.Exception ex2) {
+                    Debug.LogError($"SEGUNDA EXCEPCIÓN al cargar escena: {ex2.Message}");
+                }
+            }
+        }
+        // Añade este método a la clase GameManager.cs
+// Cerca de los otros métodos relacionados con los héroes
+
+        // Añade este método a la clase GameManager.cs
+// Con el namespace correcto para Hero
+
+[Server]
+public void OnHeroCreated(EpochLegends.Core.Hero.Hero hero)
+{
+    if (this == null || !isActiveAndEnabled) return;
+    
+    if (hero != null)
+    {
+        Debug.Log($"[GameManager] Hero created: {hero.name}");
+        
+        // Aquí puedes añadir lógica adicional según sea necesario,
+        // como almacenar referencias a héroes, asignar estadísticas, etc.
+    }
+    else
+    {
+        Debug.LogError("[GameManager] OnHeroCreated called with null hero");
+    }
+}
+        // Método para forzar verificación de la configuración
+        public void VerifyNetworkSettings() 
+        {
+            Debug.LogError("=== VERIFICACIÓN DE CONFIGURACIÓN DEL GAMEMANAGER ===");
+            Debug.LogError($"Escena de lobby: {lobbyScene}");
+            Debug.LogError($"Escena de selección: {heroSelectionScene}");
+            Debug.LogError($"Escena de gameplay: {gameplayScene}");
+            Debug.LogError($"Estado actual: {_currentState}");
+            Debug.LogError($"Temporizador: {_stateTimer}");
+            Debug.LogError($"Jugadores conectados: {_connectedPlayers.Count}");
+            
+            // Verificar NetworkManager
+            if (NetworkManager.singleton != null)
+            {
+                Debug.LogError($"NetworkManager encontrado: {NetworkManager.singleton.GetType().Name}");
+                Debug.LogError($"Escena offline: {NetworkManager.singleton.offlineScene}");
+                Debug.LogError($"Escena online: {NetworkManager.singleton.onlineScene}");
+                Debug.LogError($"Servidor activo: {NetworkServer.active}");
+                Debug.LogError($"Cliente activo: {NetworkClient.active}");
+            }
+            else
+            {
+                Debug.LogError("NetworkManager.singleton es NULL!");
+            }
         }
     }
 }

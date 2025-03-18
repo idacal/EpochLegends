@@ -42,6 +42,9 @@ namespace EpochLegends.UI.HeroSelection
         [SerializeField] private AudioClip readySound;
         [SerializeField] private AudioClip timerTickSound;
         
+        [Header("Debug Settings")]
+        [SerializeField] private bool enableDebugLogs = true;
+        
         // References
         private HeroSelectionManager selectionManager;
         private HeroRegistry heroRegistry;
@@ -53,6 +56,11 @@ namespace EpochLegends.UI.HeroSelection
         private bool isReady = false;
         private float lastSecond = 0;
         private bool managersFound = false;
+        private bool hasLoggedManagerWarning = false;
+        
+        // Contador para forzar actualizaciones periódicas
+        private float refreshTimer = 0f;
+        private float refreshInterval = 2f; // Actualizar cada 2 segundos
         
         private void Awake()
         {
@@ -61,7 +69,7 @@ namespace EpochLegends.UI.HeroSelection
             
             if (!managersFound)
             {
-                Debug.LogWarning("[HeroSelectionUIController] Required managers not found in scene - will try to find them with delay");
+                Debug.LogError("[HeroSelectionUIController] Required managers not found in scene - will try to find them with delay");
                 // Intentaremos encontrarlos después con retraso
                 StartCoroutine(FindManagersWithDelay());
             }
@@ -106,15 +114,18 @@ namespace EpochLegends.UI.HeroSelection
                 // Verificar si se encontraron ambos managers
                 managersFound = (selectionManager != null && heroRegistry != null);
                 
-                Debug.Log($"[HeroSelectionUIController] Team Manager found: {selectionManager != null}, Hero Registry found: {heroRegistry != null}");
+                if (enableDebugLogs)
+                {
+                    Debug.LogError($"[HeroSelectionUIController] Team Manager found: {selectionManager != null}, Hero Registry found: {heroRegistry != null}");
+                }
                 
                 if (managersFound)
                 {
-                    Debug.Log("[HeroSelectionUIController] Managers found successfully");
+                    Debug.LogError("[HeroSelectionUIController] Managers found successfully");
                 }
                 else
                 {
-                    Debug.LogWarning("[HeroSelectionUIController] Required managers not found in scene!");
+                    Debug.LogError("[HeroSelectionUIController] Required managers not found in scene!");
                 }
             }
             catch (System.Exception ex) {
@@ -124,7 +135,7 @@ namespace EpochLegends.UI.HeroSelection
         
         private IEnumerator FindManagersWithDelay()
         {
-            Debug.Log("[HeroSelectionUIController] Comenzando búsqueda de managers con retraso...");
+            Debug.LogError("[HeroSelectionUIController] Comenzando búsqueda de managers con retraso...");
             
             // Intentar encontrar los managers varias veces con retrasos mayores
             for (int attempt = 0; attempt < 10; attempt++)
@@ -132,14 +143,17 @@ namespace EpochLegends.UI.HeroSelection
                 // Esperar más tiempo entre intentos
                 yield return new WaitForSeconds(1.0f);
                 
-                Debug.Log($"[HeroSelectionUIController] Intento #{attempt+1} de encontrar managers...");
+                if (enableDebugLogs)
+                {
+                    Debug.LogError($"[HeroSelectionUIController] Intento #{attempt+1} de encontrar managers...");
+                }
                 
                 // Buscar primero a través del ManagersController
                 var managersController = FindObjectOfType<EpochLegends.Core.ManagersController>();
                 
                 if (managersController != null)
                 {
-                    Debug.Log("[HeroSelectionUIController] ManagersController encontrado, buscando managers específicos...");
+                    Debug.LogError("[HeroSelectionUIController] ManagersController encontrado, buscando managers específicos...");
                     selectionManager = managersController.GetManager<HeroSelectionManager>();
                     heroRegistry = managersController.GetManager<HeroRegistry>();
                 }
@@ -147,7 +161,7 @@ namespace EpochLegends.UI.HeroSelection
                 // Si no se encontraron ambos managers, buscar directamente
                 if (selectionManager == null || heroRegistry == null)
                 {
-                    Debug.Log("[HeroSelectionUIController] Buscando managers directamente en la escena...");
+                    Debug.LogError("[HeroSelectionUIController] Buscando managers directamente en la escena...");
                     selectionManager = FindObjectOfType<HeroSelectionManager>();
                     heroRegistry = FindObjectOfType<HeroRegistry>();
                 }
@@ -157,7 +171,7 @@ namespace EpochLegends.UI.HeroSelection
                 
                 if (managersFound)
                 {
-                    Debug.Log($"[HeroSelectionUIController] ¡Managers encontrados después de {attempt+1} intentos!");
+                    Debug.LogError($"[HeroSelectionUIController] ¡Managers encontrados después de {attempt+1} intentos!");
                     
                     // Inicializar la UI ahora que tenemos los managers
                     if (isActiveAndEnabled)
@@ -209,6 +223,9 @@ namespace EpochLegends.UI.HeroSelection
                 // Load hero grid and initialize player selections
                 PopulateHeroGrid();
                 InitializePlayerSelections();
+                
+                // Solicitar actualización completa tras breve pausa
+                Invoke(nameof(ForceRefreshAllUI), 1.0f);
             }
             else
             {
@@ -221,11 +238,27 @@ namespace EpochLegends.UI.HeroSelection
         {
             yield return new WaitForSeconds(2.0f);
             
-            // Registrarse para eventos
-            HeroSelectionManager.OnHeroSelected += OnHeroSelected;
-            HeroSelectionManager.OnSelectionComplete += OnSelectionComplete;
+            // Intentar encontrar los managers nuevamente
+            FindManagers();
             
-            Debug.Log("[HeroSelectionUIController] Registro de eventos completado con retraso");
+            if (managersFound)
+            {
+                // Registrarse para eventos
+                RegisterForEvents();
+                
+                // Cargar la UI inicial
+                PopulateHeroGrid();
+                InitializePlayerSelections();
+                
+                // Solicitar actualización completa
+                ForceRefreshAllUI();
+                
+                Debug.LogError("[HeroSelectionUIController] Managers encontrados en registro retrasado");
+            }
+            else
+            {
+                Debug.LogError("[HeroSelectionUIController] No se pudieron encontrar managers en registro retrasado");
+            }
         }
         
         private void OnDestroy()
@@ -234,23 +267,56 @@ namespace EpochLegends.UI.HeroSelection
             UnregisterFromEvents();
         }
         
-private void Update()
-{
-    if (!managersFound) 
-    {
-        Debug.LogWarning("[HeroSelectionUIController] Update skipped - managers not found");
-        return;
-    }
-    
-    if (selectionManager == null)
-    {
-        Debug.LogWarning("[HeroSelectionUIController] Update skipped - selectionManager is null");
-        return;
-    }
-    
-    // Update timer display
-    UpdateTimer();
-}
+        private void Update()
+        {
+            if (!managersFound) 
+            {
+                if (!hasLoggedManagerWarning)
+                {
+                    Debug.LogError("[HeroSelectionUIController] Update skipped - managers not found");
+                    hasLoggedManagerWarning = true;
+                }
+                return;
+            }
+            
+            if (selectionManager == null)
+            {
+                if (!hasLoggedManagerWarning)
+                {
+                    Debug.LogError("[HeroSelectionUIController] Update skipped - selectionManager is null");
+                    hasLoggedManagerWarning = true;
+                }
+                return;
+            }
+            
+            // Update timer display
+            UpdateTimer();
+            
+            // Realizar actualizaciones periódicas para asegurar sincronización
+            refreshTimer += Time.deltaTime;
+            if (refreshTimer >= refreshInterval)
+            {
+                refreshTimer = 0f;
+                
+                // Solicitar datos actualizados al servidor
+                if (NetworkClient.active && NetworkClient.isConnected && selectionManager != null)
+                {
+                    // Intentar invocar el método CmdForceRefreshClientData (si existe)
+                    var cmdMethod = selectionManager.GetType().GetMethod("CmdForceRefreshClientData", 
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (cmdMethod != null)
+                    {
+                        cmdMethod.Invoke(selectionManager, new object[] { null });
+                        if (enableDebugLogs)
+                            Debug.LogError("Solicitando actualización de datos del servidor");
+                    }
+                    else
+                    {
+                        UpdatePlayerSelections();
+                    }
+                }
+            }
+        }
         
         #region UI Initialization
         
@@ -258,7 +324,7 @@ private void Update()
         {
             if (!managersFound || heroGridContainer == null)
             {
-                Debug.LogWarning("[HeroSelectionUIController] Cannot populate hero grid - managers or container missing");
+                Debug.LogError("[HeroSelectionUIController] Cannot populate hero grid - managers or container missing");
                 return;
             }
             
@@ -286,14 +352,14 @@ private void Update()
                 }
             }
             
-            Debug.Log($"[HeroSelectionUIController] Populated {heroes.Count} hero cards");
+            Debug.LogError($"[HeroSelectionUIController] Populated {heroes.Count} hero cards");
         }
         
         private void InitializePlayerSelections()
         {
             if (!managersFound)
             {
-                Debug.LogWarning("[HeroSelectionUIController] Cannot initialize player selections - managers missing");
+                Debug.LogError("[HeroSelectionUIController] Cannot initialize player selections - managers missing");
                 return;
             }
             
@@ -319,6 +385,8 @@ private void Update()
         
         private void ClearPlayerSelections()
         {
+            if (!isActiveAndEnabled) return;
+            
             foreach (var display in playerSelections.Values)
             {
                 if (display != null)
@@ -431,7 +499,10 @@ private void Update()
                         }
                     }
                     
-                    Debug.Log($"[HeroSelectionUIController] Displayed {hero.Abilities.Count} abilities for {hero.DisplayName}");
+                    if (enableDebugLogs)
+                    {
+                        Debug.LogError($"[HeroSelectionUIController] Displayed {hero.Abilities.Count} abilities for {hero.DisplayName}");
+                    }
                 }
             }
             
@@ -549,11 +620,21 @@ private void Update()
                     if (!string.IsNullOrEmpty(heroId) && heroRegistry != null)
                     {
                         hero = heroRegistry.GetHeroById(heroId);
+                        if (hero == null)
+                        {
+                            Debug.LogError($"No se encontró definición de héroe para ID: {heroId}");
+                        }
                     }
                     
                     display.Initialize(playerName, isLocalPlayer, hero);
                     display.SetPlayerNetId(netId);
                     playerSelections[netId] = display;
+                    
+                    // Verificar que la UI se actualizó correctamente
+                    if (enableDebugLogs)
+                    {
+                        Debug.LogError($"Creado display para jugador {netId} (equipo {teamId}), héroe: {(hero != null ? hero.DisplayName : "ninguno")}");
+                    }
                 }
             }
         }
@@ -614,11 +695,17 @@ private void Update()
         
         private void UpdateTimer()
         {
-                if (!managersFound || timerText == null || selectionManager == null) return;
-    
-    float remainingTime = selectionManager.GetRemainingTime();
-    Debug.Log($"[HeroSelectionUIController] Timer remaining time: {remainingTime}");
-    timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
+            if (timerText == null || selectionManager == null) return;
+
+            float remainingTime = selectionManager.GetRemainingTime();
+            
+            // Limitar logging para debug - solo log cada segundo o cuando es crítico
+            if (enableDebugLogs && (Mathf.FloorToInt(remainingTime) != Mathf.FloorToInt(lastSecond) || remainingTime <= 5))
+            {
+                Debug.LogError($"[HeroSelectionUIController] Timer remaining time: {remainingTime:F1}");
+            }
+            
+            timerText.text = $"Tiempo Restante: {Mathf.CeilToInt(remainingTime)}s";
             
             // Play tick sound on each second change when time is low
             int currentSecond = Mathf.CeilToInt(remainingTime);
@@ -632,7 +719,7 @@ private void Update()
                     timerText.color = Color.red;
                 }
             }
-            lastSecond = currentSecond;
+            lastSecond = remainingTime;  // Guardar el valor exacto, no solo el redondeado
         }
         
         private bool CheckAllPlayersReady()
@@ -671,12 +758,23 @@ private void Update()
         {
             if (!managersFound || selectedHero == null || selectionManager == null) return;
             
+            Debug.LogError($"Solicitando seleccionar héroe: {selectedHero.HeroId}");
+            
             // Send hero selection to server
             selectionManager.SelectHeroLocally(selectedHero.HeroId);
             
             // Update UI
+            if (NetworkClient.localPlayer != null)
+            {
+                uint netId = NetworkClient.localPlayer.netId;
+                if (playerSelections.TryGetValue(netId, out PlayerSelectionDisplay display))
+                {
+                    display.UpdateHeroSelection(selectedHero);
+                    Debug.LogError($"Actualizado display local para jugador {netId}");
+                }
+            }
+            
             UpdateLocalPlayerSelectionUI();
-            UpdatePlayerSelections();
             
             // Play selection sound
             PlaySound(selectSound);
@@ -690,23 +788,32 @@ private void Update()
             uint localPlayerNetId = NetworkClient.localPlayer?.netId ?? 100; // Use 100 for testing
             string selectedHeroId = selectionManager.GetSelectedHero(localPlayerNetId);
             
+            Debug.LogError($"Verificando selección para jugador {localPlayerNetId}: {selectedHeroId}");
+            
             if (string.IsNullOrEmpty(selectedHeroId))
             {
                 // Cannot ready without selecting a hero
                 // Show error message or feedback
-                Debug.Log("Cannot ready up without selecting a hero first");
+                Debug.LogError("Cannot ready up without selecting a hero first");
                 return;
             }
             
             // Toggle ready status
             isReady = !isReady;
             
+            Debug.LogError($"Cambiando estado ready a: {isReady}");
+            
             // Send ready status to server
             selectionManager.SetReadyStatus(isReady);
             
             // Update UI
-            UpdateLocalPlayerSelectionUI();
-            UpdatePlayerSelections();
+            UpdateReadyButtonText();
+            
+            // Actualizar el display local inmediatamente
+            if (playerSelections.TryGetValue(localPlayerNetId, out PlayerSelectionDisplay display))
+            {
+                display.SetReadyStatus(isReady);
+            }
             
             // Play ready sound
             PlaySound(readySound);
@@ -714,18 +821,50 @@ private void Update()
         
         private void OnHeroSelected(uint playerNetId, string heroId)
         {
-            if (!managersFound) return;
+            Debug.LogError($"=== EVENTO: Jugador {playerNetId} seleccionó héroe {heroId} ===");
             
-            // Update the UI when any player selects a hero
-            UpdateLocalPlayerSelectionUI();
+            if (!managersFound) 
+            {
+                Debug.LogError("ERROR: Managers no encontrados");
+                return;
+            }
+            
+            // Forzar una actualización completa de la UI
+            ClearPlayerSelections();
             UpdatePlayerSelections();
+            UpdateLocalPlayerSelectionUI();
+            
+            // Verificar que se actualizó correctamente
+            if (playerSelections.TryGetValue(playerNetId, out PlayerSelectionDisplay display))
+            {
+                HeroDefinition heroDefinition = null;
+                if (heroRegistry != null && !string.IsNullOrEmpty(heroId))
+                {
+                    heroDefinition = heroRegistry.GetHeroById(heroId);
+                }
+                
+                Debug.LogError($"Actualizando visual para jugador {playerNetId} con héroe {heroId}");
+                display.UpdateHeroSelection(heroDefinition);
+            }
+            else
+            {
+                Debug.LogError($"ERROR: No se encontró el display para el jugador {playerNetId}");
+            }
+            
+            // Forzar una actualización de estado "ready"
+            foreach (var entry in playerSelections)
+            {
+                bool isReady = selectionManager.IsPlayerReady(entry.Key);
+                entry.Value.SetReadyStatus(isReady);
+                Debug.LogError($"Jugador {entry.Key} - Estado ready: {isReady}");
+            }
         }
         
         private void OnSelectionComplete()
         {
             // Selection phase is over, UI will be transitioned automatically
             // by the game manager to the game scene
-            Debug.Log("Hero selection complete");
+            Debug.LogError("Hero selection complete - transicionando a escena de juego");
         }
         
         #endregion
@@ -737,6 +876,116 @@ private void Update()
             if (audioSource != null && clip != null)
             {
                 audioSource.PlayOneShot(clip);
+            }
+        }
+        
+        // Método público para forzar actualización de toda la UI
+        public void ForceRefreshAllUI()
+        {
+            if (!isActiveAndEnabled) return;
+            
+            Debug.LogError("=== FORZANDO ACTUALIZACIÓN COMPLETA DE UI ===");
+            
+            if (!managersFound) 
+            {
+                Debug.LogError("ERROR: Managers no encontrados, buscando...");
+                FindManagers();
+                
+                if (!managersFound)
+                {
+                    Debug.LogError("ERROR: Aún no se encuentran managers");
+                    return;
+                }
+            }
+            
+            // Actualizar toda la UI
+            ClearPlayerSelections();
+            PopulateHeroGrid();
+            UpdatePlayerSelections();
+            UpdateLocalPlayerSelectionUI();
+            
+            // Verificación de estado
+            var deserializedHeroes = selectionManager != null ? DeserializeAndLogHeroSelections() : null;
+            if (deserializedHeroes != null)
+            {
+                foreach (var key in deserializedHeroes.Keys)
+                {
+                    Debug.LogError($"Jugador {key} seleccionó héroe: {deserializedHeroes[key]}");
+                }
+            }
+            
+            Debug.LogError("Actualización de UI completada");
+        }
+        
+        // Método para depuración
+        private Dictionary<uint, string> DeserializeAndLogHeroSelections()
+        {
+            // Este es un método solo para depuración que expone los datos
+            Dictionary<uint, string> selections = new Dictionary<uint, string>();
+            
+            for (uint i = 0; i < 1000; i++)
+            {
+                string heroId = selectionManager.GetSelectedHero(i);
+                if (!string.IsNullOrEmpty(heroId))
+                {
+                    selections[i] = heroId;
+                    
+                    // Verificar si se muestra en la UI
+                    if (playerSelections.TryGetValue(i, out PlayerSelectionDisplay display))
+                    {
+                        Debug.LogError($"Jugador {i} tiene display, héroe actual: {display.GetSelectedHero()?.HeroId ?? "ninguno"}");
+                    }
+                    else
+                    {
+                        Debug.LogError($"Jugador {i} NO tiene display en UI");
+                    }
+                }
+            }
+            
+            return selections;
+        }
+        
+        // Método para forzar fin de tiempo (para depuración)
+        public void ForceTimeEnd()
+        {
+            if (selectionManager != null)
+            {
+                // Intentar llamar al método ForceTimerStart con un valor muy bajo
+                var method = selectionManager.GetType().GetMethod("ForceTimerStart", 
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                if (method != null)
+                {
+                    method.Invoke(selectionManager, new object[] { 0.1f });
+                    Debug.LogError("Forzado fin de tiempo de selección");
+                }
+            }
+        }
+        
+        // Método para forzar cambio de escena (para depuración)
+        public void ForceSceneChange()
+        {
+            Debug.LogError("Forzando cambio a escena de gameplay");
+            
+            if (selectionManager != null)
+            {
+                // Intentar llamar al método ForceSceneChange
+                var method = selectionManager.GetType().GetMethod("ForceSceneChange", 
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                if (method != null)
+                {
+                    method.Invoke(selectionManager, null);
+                }
+                else
+                {
+                    Debug.LogError("Método ForceSceneChange no encontrado");
+                }
+            }
+            
+            // Alternativa: llamar a GameManager directamente
+            if (EpochLegends.GameManager.Instance != null)
+            {
+                Debug.LogError("Solicitando inicio de juego a GameManager");
+                EpochLegends.GameManager.Instance.StartGame();
             }
         }
         

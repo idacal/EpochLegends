@@ -71,18 +71,75 @@ public class MOBACamera : MonoBehaviour
         // Rotación inicial (ajustada a 60 grados para un ángulo más pronunciado)
         transform.rotation = Quaternion.Euler(cameraPitch, 0f, 0f);
         
-        // Inicializar posición de la cámara
-        if (target != null)
+        // Buscar héroe local para seguir automáticamente
+        if (target == null)
         {
-            cameraTargetPosition = target.position;
+            StartCoroutine(FindLocalHero());
         }
         else
         {
-            // Sin target, usar posición específica
-            cameraTargetPosition = new Vector3(0f, 10f, -8f);
+            cameraTargetPosition = target.position;
         }
         
         UpdateCameraPosition(false); // Posicionamiento inmediato
+    }
+    
+    private System.Collections.IEnumerator FindLocalHero()
+    {
+        Debug.Log($"[CAMERA_{cameraId}] Buscando héroe local para seguir...");
+        
+        // Esperar un momento para que todo se inicialice
+        yield return new WaitForSeconds(0.5f);
+        
+        // Intentar encontrar el PlayerController local primero
+        var controllers = FindObjectsOfType<EpochLegends.Core.Player.Controller.PlayerController>();
+        foreach (var controller in controllers)
+        {
+            if (controller.isLocalPlayer)
+            {
+                Debug.Log($"[CAMERA_{cameraId}] Encontrado PlayerController local");
+                
+                // Esperar a que el controlador encuentre su héroe
+                float timeout = 5f;
+                while (controller.ControlledHero == null && timeout > 0)
+                {
+                    yield return new WaitForSeconds(0.5f);
+                    timeout -= 0.5f;
+                }
+                
+                if (controller.ControlledHero != null)
+                {
+                    SetTarget(controller.ControlledHero.transform);
+                    Debug.Log($"[CAMERA_{cameraId}] Encontrado héroe local para seguir: {controller.ControlledHero.name}");
+                    yield break;
+                }
+                else
+                {
+                    Debug.LogWarning($"[CAMERA_{cameraId}] Controller no tiene héroe asignado después de timeout");
+                }
+            }
+        }
+        
+        // Si no encontramos a través del controlador, buscar héroes directamente
+        Debug.LogWarning($"[CAMERA_{cameraId}] No se encontró PlayerController local, buscando héroes directamente");
+        
+        var heroes = FindObjectsOfType<EpochLegends.Core.Hero.Hero>();
+        foreach (var hero in heroes)
+        {
+            NetworkIdentity identity = hero.GetComponent<NetworkIdentity>();
+            if (identity != null && identity.isLocalPlayer)
+            {
+                SetTarget(hero.transform);
+                Debug.Log($"[CAMERA_{cameraId}] Encontrado héroe local alternativo: {hero.name}");
+                yield break;
+            }
+        }
+        
+        Debug.LogError($"[CAMERA_{cameraId}] No se pudo encontrar ningún héroe local para seguir");
+        
+        // Reintentar después de un tiempo si no se encontró
+        yield return new WaitForSeconds(2f);
+        StartCoroutine(FindLocalHero());
     }
     
     private void LateUpdate()

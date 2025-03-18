@@ -64,7 +64,8 @@ namespace EpochLegends.Core.Ability
         [Header("Components")]
         [SerializeField] private List<string> abilityComponentTypes = new List<string>();
         [SerializeField] private string abilityImplementationClass = "";
-        
+        [SerializeField] private int maxLevel = 5;
+        public int MaxLevel => maxLevel;
         // Properties
         public string AbilityId => abilityId;
         public string DisplayName => displayName;

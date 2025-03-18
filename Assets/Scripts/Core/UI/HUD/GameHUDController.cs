@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using EpochLegends.Core.Hero;
 using EpochLegends.Core.Ability;
 using EpochLegends.Core.Player.Controller;
+using EpochLegends.Core.UI.Game;
 
 namespace EpochLegends.UI.Game
 {
@@ -20,10 +21,8 @@ namespace EpochLegends.UI.Game
         [SerializeField] private TextMeshProUGUI levelText;
         [SerializeField] private Image heroPortrait;
         
-        [Header("Abilities")]
-        [SerializeField] private Transform abilitiesContainer;
-        [SerializeField] private GameObject abilitySlotPrefab;
-        [SerializeField] private KeyCode[] abilityHotkeys = new KeyCode[] { KeyCode.Q, KeyCode.W, KeyCode.E, KeyCode.R };
+        [Header("Ability System")]
+        [SerializeField] private AbilityUIManager abilityUIManager;
         
         [Header("Game Info")]
         [SerializeField] private TextMeshProUGUI gameTimerText;
@@ -41,28 +40,41 @@ namespace EpochLegends.UI.Game
         [SerializeField] private Button disconnectButton;
         
         // Referencias
-        private Hero localHero;
+        private EpochLegends.Core.Hero.Hero localHero;
         private PlayerController playerController;
         
-        // Cached UI elements
-        private List<AbilitySlot> abilitySlots = new List<AbilitySlot>();
+        // Estado de UI
         private bool isMenuOpen = false;
         
         private void Awake()
         {
             // Set up button listeners
-            resumeButton.onClick.AddListener(OnResumeClicked);
-            optionsButton.onClick.AddListener(OnOptionsClicked);
-            disconnectButton.onClick.AddListener(OnDisconnectClicked);
+            if (resumeButton != null) resumeButton.onClick.AddListener(OnResumeClicked);
+            if (optionsButton != null) optionsButton.onClick.AddListener(OnOptionsClicked);
+            if (disconnectButton != null) disconnectButton.onClick.AddListener(OnDisconnectClicked);
             
-            // Initialize UI
-            InitializeUI();
+            // Verificar que tenemos el AbilityUIManager
+            if (abilityUIManager == null)
+            {
+                abilityUIManager = GetComponentInChildren<AbilityUIManager>();
+                if (abilityUIManager == null)
+                {
+                    Debug.LogError("GameHUDController: No se encontró AbilityUIManager. La UI de habilidades no funcionará.");
+                }
+            }
         }
         
         private void Start()
         {
             // Initially hide pause menu
             SetPauseMenuVisible(false);
+            
+            // Set up minimap
+            if (minimapCamera != null && minimapRenderTexture != null && minimapImage != null)
+            {
+                minimapCamera.targetTexture = minimapRenderTexture;
+                minimapImage.texture = minimapRenderTexture;
+            }
         }
         
         public override void OnStartClient()
@@ -85,46 +97,12 @@ namespace EpochLegends.UI.Game
             if (localHero != null)
             {
                 UpdateHeroStatus();
-                UpdateAbilities();
+                // Note: La actualización de habilidades ahora es manejada por AbilityUIManager
             }
             
             // Update game info
             UpdateGameInfo();
         }
-        
-        #region UI Initialization
-        
-        private void InitializeUI()
-        {
-            // Clear abilities container
-            foreach (Transform child in abilitiesContainer)
-            {
-                Destroy(child.gameObject);
-            }
-            abilitySlots.Clear();
-            
-            // Create ability slots based on hotkeys
-            for (int i = 0; i < abilityHotkeys.Length; i++)
-            {
-                GameObject slotObj = Instantiate(abilitySlotPrefab, abilitiesContainer);
-                AbilitySlot slot = slotObj.GetComponent<AbilitySlot>();
-                
-                if (slot != null)
-                {
-                    slot.Initialize(abilityHotkeys[i].ToString());
-                    abilitySlots.Add(slot);
-                }
-            }
-            
-            // Set up minimap
-            if (minimapCamera != null && minimapRenderTexture != null && minimapImage != null)
-            {
-                minimapCamera.targetTexture = minimapRenderTexture;
-                minimapImage.texture = minimapRenderTexture;
-            }
-        }
-        
-        #endregion
         
         #region Hero Tracking
         
@@ -145,6 +123,7 @@ namespace EpochLegends.UI.Game
                         if (localHero != null)
                         {
                             // Hero found, initialize HUD with hero data
+                            Debug.Log($"GameHUDController: Héroe local encontrado a través del controlador: {localHero.name}");
                             InitializeHeroUI();
                             yield break;
                         }
@@ -152,7 +131,7 @@ namespace EpochLegends.UI.Game
                 }
                 
                 // If not found directly, try to find any hero with local authority
-                Hero[] heroes = FindObjectsOfType<Hero>();
+                EpochLegends.Core.Hero.Hero[] heroes = FindObjectsOfType<EpochLegends.Core.Hero.Hero>();
                 foreach (var hero in heroes)
                 {
                     // Verifica si el héroe es local
@@ -161,6 +140,7 @@ namespace EpochLegends.UI.Game
                         localHero = hero;
                         
                         // Hero found, initialize HUD with hero data
+                        Debug.Log($"GameHUDController: Héroe local encontrado directamente: {localHero.name}");
                         InitializeHeroUI();
                         yield break;
                     }
@@ -175,21 +155,21 @@ namespace EpochLegends.UI.Game
         // Adapta esta lógica según cómo implementaste esto en tu proyecto
         private bool IsLocalController(PlayerController controller)
         {
-            // Ejemplo: podría ser que tengas un campo isLocalPlayer, o podrías
-            // comparar con un ID de jugador local almacenado en algún lado
-            
-            // Por ahora, asumo que el primer controlador que encontramos es el local
-            // Pero deberías reemplazar esto con tu lógica concreta
-            return true; 
+            // Por ahora, asumo que usaremos isLocalPlayer de NetworkBehaviour
+            return controller.isLocalPlayer;
         }
         
         // Esta función verifica si un héroe pertenece al jugador local
-        // Adapta según tu implementación
-        private bool IsLocalHero(Hero hero)
+        // Adaptada para versiones anteriores de Mirror
+        private bool IsLocalHero(EpochLegends.Core.Hero.Hero hero)
         {
-            // Similar a IsLocalController, adapta según tu lógica
-            // Por ahora, asumo que el primer héroe que encontramos es el local
-            return true;
+            // Verificar si el héroe tiene un NetworkIdentity con autoridad local
+            NetworkIdentity identity = hero.GetComponent<NetworkIdentity>();
+            if (identity != null)
+            {
+                return identity.isLocalPlayer;
+            }
+            return false;
         }
         
         private void InitializeHeroUI()
@@ -206,15 +186,54 @@ namespace EpochLegends.UI.Game
             {
                 heroPortrait.sprite = localHero.HeroDefinition.HeroPortrait;
             }
-            
-            // Set up ability slots
-            List<BaseAbility> abilities = localHero.Abilities;
-            for (int i = 0; i < abilities.Count && i < abilitySlots.Count; i++)
+            else if (heroPortrait != null)
             {
-                abilitySlots[i].SetAbility(abilities[i]);
+                // Usar un sprite por defecto si no hay retrato definido
+                heroPortrait.sprite = null; // Reemplazar con un sprite por defecto si lo tienes
             }
             
-            Debug.Log($"HUD initialized for hero: {localHero.name}");
+            // Configurar UI de habilidades usando AbilityUIManager
+            if (abilityUIManager != null)
+            {
+                abilityUIManager.SetupForHero(localHero);
+                Debug.Log("GameHUDController: Configuración de habilidades delegada a AbilityUIManager");
+            }
+            else
+            {
+                Debug.LogError("GameHUDController: AbilityUIManager es null, no se puede configurar la UI de habilidades");
+            }
+            
+            // Configurar barras de recursos
+            UpdateHeroStatus();
+            
+            // Suscribirse a eventos del héroe
+            if (localHero != null)
+            {
+                // Registrar para eventos de cambio de vida/mana/nivel
+                localHero.OnHeroLevelUp += OnHeroLevelUp;
+                
+                // Aquí podrías añadir más suscripciones a eventos según las necesidades
+            }
+            
+            Debug.Log($"GameHUDController: HUD initialized for hero: {localHero.name}");
+        }
+        
+        // Método para manejar el evento de subida de nivel
+        private void OnHeroLevelUp(EpochLegends.Core.Hero.Hero hero)
+        {
+            Debug.Log($"GameHUDController: Hero leveled up to {hero.Level}");
+            
+            // Actualizar UI de nivel
+            if (levelText != null)
+            {
+                levelText.text = $"Lvl {hero.Level}";
+            }
+            
+            // Actualizar barras de recursos (pueden haber cambiado por el nivel)
+            UpdateHeroStatus();
+            
+            // Nota: La actualización de habilidades es manejada por AbilityUIManager
+            // que ya está suscrito a este mismo evento
         }
         
         #endregion
@@ -256,17 +275,6 @@ namespace EpochLegends.UI.Game
             }
         }
         
-        private void UpdateAbilities()
-        {
-            if (localHero == null) return;
-            
-            List<BaseAbility> abilities = localHero.Abilities;
-            for (int i = 0; i < abilities.Count && i < abilitySlots.Count; i++)
-            {
-                abilitySlots[i].UpdateCooldown(abilities[i]);
-            }
-        }
-        
         private void UpdateGameInfo()
         {
             // Update game timer (this would come from the game manager in a real implementation)
@@ -281,7 +289,7 @@ namespace EpochLegends.UI.Game
             // Update score (this would come from the game manager in a real implementation)
             if (scoreText != null)
             {
-                // Placeholder scores
+                // Placeholder scores - En una implementación real obtendrías estos valores del GameManager o TeamManager
                 int team1Score = 0;
                 int team2Score = 0;
                 scoreText.text = $"{team1Score} - {team2Score}";
@@ -300,7 +308,8 @@ namespace EpochLegends.UI.Game
         private void SetPauseMenuVisible(bool visible)
         {
             isMenuOpen = visible;
-            pauseMenuPanel.SetActive(visible);
+            if (pauseMenuPanel != null)
+                pauseMenuPanel.SetActive(visible);
             
             // In a real implementation, you might also pause the game
             // when the menu is open, but we'll just toggle visibility for now
@@ -331,87 +340,20 @@ namespace EpochLegends.UI.Game
         }
         
         #endregion
-    }
-    
-    #region Helper Classes
-    
-    // Component for individual ability slots in the HUD
-    public class AbilitySlot : MonoBehaviour
-    {
-        [SerializeField] private Image abilityIcon;
-        [SerializeField] private Image cooldownOverlay;
-        [SerializeField] private TextMeshProUGUI cooldownText;
-        [SerializeField] private TextMeshProUGUI hotkeyText;
         
-        private BaseAbility linkedAbility;
-        
-        public void Initialize(string hotkeyLabel)
+        private void OnDestroy()
         {
-            // Set hotkey label
-            if (hotkeyText != null)
+            // Limpiar eventos para evitar memory leaks
+            if (localHero != null)
             {
-                hotkeyText.text = hotkeyLabel;
+                // Eliminar suscripciones para evitar memory leaks
+                localHero.OnHeroLevelUp -= OnHeroLevelUp;
             }
             
-            // Reset cooldown display
-            if (cooldownOverlay != null)
-            {
-                cooldownOverlay.fillAmount = 0f;
-                cooldownOverlay.gameObject.SetActive(false);
-            }
-            
-            if (cooldownText != null)
-            {
-                cooldownText.text = "";
-                cooldownText.gameObject.SetActive(false);
-            }
-        }
-        
-        public void SetAbility(BaseAbility ability)
-        {
-            linkedAbility = ability;
-            
-            // Set ability icon
-            if (abilityIcon != null && ability.Definition != null && ability.Definition.AbilityIcon != null)
-            {
-                abilityIcon.sprite = ability.Definition.AbilityIcon;
-                abilityIcon.gameObject.SetActive(true);
-            }
-            else if (abilityIcon != null)
-            {
-                abilityIcon.gameObject.SetActive(false);
-            }
-        }
-        
-        public void UpdateCooldown(BaseAbility ability)
-        {
-            if (ability == null) return;
-            
-            bool isOnCooldown = ability.IsOnCooldown;
-            float cooldownPercent = ability.CurrentCooldown / ability.MaxCooldown;
-            
-            // Update cooldown overlay
-            if (cooldownOverlay != null)
-            {
-                cooldownOverlay.gameObject.SetActive(isOnCooldown);
-                cooldownOverlay.fillAmount = cooldownPercent;
-            }
-            
-            // Update cooldown text
-            if (cooldownText != null)
-            {
-                cooldownText.gameObject.SetActive(isOnCooldown);
-                if (isOnCooldown)
-                {
-                    cooldownText.text = Mathf.Ceil(ability.CurrentCooldown).ToString();
-                }
-                else
-                {
-                    cooldownText.text = "";
-                }
-            }
+            // Limpiar botones UI
+            if (resumeButton != null) resumeButton.onClick.RemoveAllListeners();
+            if (optionsButton != null) optionsButton.onClick.RemoveAllListeners();
+            if (disconnectButton != null) disconnectButton.onClick.RemoveAllListeners();
         }
     }
-    
-    #endregion
 }

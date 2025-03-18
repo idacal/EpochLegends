@@ -394,25 +394,84 @@ namespace EpochLegends.Core.Player.Controller
         
         #region Utility Functions
         
-        private void FindControlledHero()
+        // Este es solo el método FindControlledHero actualizado para el PlayerController.cs
+// Reemplaza este método en tu archivo existente
+
+private void FindControlledHero()
+{
+    if (!isLocalPlayer) return;
+    
+    Debug.Log("PlayerController: Buscando héroe para controlar...");
+    
+    // Intentar primero por isLocalPlayer de red
+    Hero.Hero[] heroes = FindObjectsOfType<Hero.Hero>();
+    foreach (var hero in heroes)
+    {
+        NetworkIdentity heroNetId = hero.GetComponent<NetworkIdentity>();
+        if (heroNetId != null && heroNetId.isLocalPlayer)
         {
-            // Find the hero that this player should control
-            // This could be based on player ID, connection ID, etc.
+            controlledHero = hero;
+            Debug.Log($"PlayerController: Encontrado héroe por autoridad local: {hero.name}");
             
-            // For simplicity in this example, we'll just find any hero with matching owner ID
-            Hero.Hero[] heroes = FindObjectsOfType<Hero.Hero>();
-            foreach (var hero in heroes)
+            // Notificar a CameraManager si está disponible
+            var cameraManager = FindObjectOfType<CameraManager>();
+            if (cameraManager != null)
             {
-                NetworkIdentity heroNetId = hero.GetComponent<NetworkIdentity>();
-                if (heroNetId != null && heroNetId.connectionToClient != null 
-                    && heroNetId.connectionToClient == connectionToClient)
+                cameraManager.SetCameraTarget(hero.transform);
+            }
+            
+            return;
+        }
+    }
+    
+    // Si no encontró por isLocalPlayer, buscar por coincidencia de conexión
+    foreach (var hero in heroes)
+    {
+        NetworkIdentity heroNetId = hero.GetComponent<NetworkIdentity>();
+        if (heroNetId != null && heroNetId.connectionToClient != null 
+            && heroNetId.connectionToClient.connectionId == connectionToClient.connectionId)
+        {
+            controlledHero = hero;
+            Debug.Log($"PlayerController: Encontrado héroe por conexión: {hero.name}");
+            
+            // Notificar a CameraManager
+            var cameraManager = FindObjectOfType<CameraManager>();
+            if (cameraManager != null)
+            {
+                cameraManager.SetCameraTarget(hero.transform);
+            }
+            
+            return;
+        }
+    }
+    
+    // Tercer intento: comprobación directa de clientAuthority en NetConnection
+    if (connectionToClient != null)
+    {
+        foreach (var hero in heroes)
+        {
+            NetworkIdentity heroNetId = hero.GetComponent<NetworkIdentity>();
+            if (heroNetId != null && heroNetId.connectionToClient == connectionToClient)
+            {
+                controlledHero = hero;
+                Debug.Log($"PlayerController: Encontrado héroe por NetworkConnectionToClient: {hero.name}");
+                
+                // Notificar a CameraManager
+                var cameraManager = FindObjectOfType<CameraManager>();
+                if (cameraManager != null)
                 {
-                    controlledHero = hero;
-                    Debug.Log($"Found controlled hero: {hero.name}");
-                    break;
+                    cameraManager.SetCameraTarget(hero.transform);
                 }
+                
+                return;
             }
         }
+    }
+    
+    // No se encontró el héroe, programar otro intento
+    Debug.LogWarning("PlayerController: No se pudo encontrar héroe para controlar, reintentando en 1 segundo");
+    Invoke(nameof(FindControlledHero), 1.0f);
+}
         
         [Command]
         private void CmdAssignHero(uint heroNetId)

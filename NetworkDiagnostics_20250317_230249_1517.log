@@ -1,0 +1,27 @@
+=== Network Diagnostics Started at 17-03-2025 23:02:49 ===
+Active Scene: Lobby
+Network Mode: Server
+[23:02:49.673] NetworkDiagnostics initialized at 17-03-2025 23:02:49
+[23:02:50.014] SERVER SPAWN: HeroRegistry, NetID: 1, SceneID: 3B57411BD603BA67, AssetID: 1831850035
+[23:02:50.014] SERVER SPAWN: TeamManager, NetID: 2, SceneID: 3B57411B23E6E149, AssetID: 2613641029
+[23:02:50.014] SERVER SPAWN: TeamAssignment, NetID: 3, SceneID: 3B57411B6E483AD7, AssetID: 2920735973
+[23:02:50.015] SERVER SPAWN: GameManager, NetID: 4, SceneID: 3B57411BDBAA8B3E, AssetID: 2598542897
+[23:02:50.015] SERVER SPAWN: HeroSelectionManager, NetID: 5, SceneID: 3B57411B6EB7EE0B, AssetID: 4181262340
+[23:02:50.016] SERVER SPAWN: LobbyManager, NetID: 6, SceneID: 3B57411B17916B04, AssetID: 0
+[23:02:50.017] SERVER SPAWN: temp_player [connId=0], NetID: 7, SceneID: 0, AssetID: 1462839937
+[23:02:53.010] SERVER SPAWN: temp_player [connId=390222148], NetID: 8, SceneID: 0, AssetID: 1462839937
+[23:02:58.548] SERVER SCENE CHANGED: HeroSelection
+[23:02:59.052] SERVER SPAWN: temp_player [connId=0], NetID: 12, SceneID: 0, AssetID: 1462839937
+[23:02:59.052] SERVER SPAWN: temp_player [connId=390222148], NetID: 13, SceneID: 0, AssetID: 1462839937
+[23:02:59.052] SERVER SPAWN: HeroRegistry, NetID: 9, SceneID: 7442F4A3EAB31567, AssetID: 1831850035
+[23:02:59.053] SERVER SPAWN: HeroSelectionManager, NetID: 10, SceneID: 7442F4A30C7F5961, AssetID: 4181262340
+[23:02:59.053] SERVER SPAWN: HeroSelectionCanvas, NetID: 11, SceneID: 7442F4A325BB41ED, AssetID: 0
+[23:02:59.053] SERVER UNSPAWN: HeroRegistry, NetID: 1
+[23:02:59.053] SERVER UNSPAWN: TeamManager, NetID: 2
+[23:02:59.053] SERVER UNSPAWN: TeamAssignment, NetID: 3
+[23:02:59.053] SERVER UNSPAWN: GameManager, NetID: 4
+[23:02:59.053] SERVER UNSPAWN: HeroSelectionManager, NetID: 5
+[23:02:59.053] SERVER UNSPAWN: LobbyManager, NetID: 6
+[23:02:59.053] SERVER UNSPAWN: temp_player [connId=0], NetID: 7
+[23:02:59.054] SERVER UNSPAWN: temp_player [connId=390222148], NetID: 8
+=== Network Diagnostics Stopped at 17-03-2025 23:04:06 ===

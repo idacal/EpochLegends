@@ -1,0 +1,343 @@
+using UnityEngine;
+using Mirror; // Importamos Mirror en lugar de Netcode
+
+public class MOBACamera : MonoBehaviour
+{
+    [Header("Camera Configuration")]
+    [SerializeField] private Transform target;
+    [SerializeField] private float cameraHeight = 18f;
+    [SerializeField] private float cameraDistance = 14f;
+    [SerializeField] private float cameraPitch = 60f;
+    
+    [Header("Movement")]
+    [SerializeField] private float edgeScrollSpeed = 15.0f;
+    [SerializeField] private float edgeScrollThreshold = 20.0f;
+    [SerializeField] private bool useEdgeScrolling = true;
+    [SerializeField] private float mouseWheelZoomSpeed = 5.0f;
+    [SerializeField] private Vector2 heightZoomRange = new Vector2(12f, 28f);
+    [SerializeField] private Vector2 distanceZoomRange = new Vector2(10f, 22f);
+    [SerializeField] private float snapToTargetSpeed = 8.0f;
+    
+    [Header("Map Boundaries")]
+    [SerializeField] private bool useBoundaries = true;
+    [SerializeField] private float mapMinX = -50f;
+    [SerializeField] private float mapMaxX = 50f;
+    [SerializeField] private float mapMinZ = -50f;
+    [SerializeField] private float mapMaxZ = 50f;
+    
+    [Header("Controls")]
+    [SerializeField] private KeyCode centerOnPlayerKey = KeyCode.Space;
+    [SerializeField] private KeyCode cameraDragKey = KeyCode.Mouse2;
+    
+    // Variables internas
+    private Vector3 cameraTargetPosition;
+    private float currentZoomFactor = 0.5f;
+    private bool isDragging = false;
+    private Vector3 dragStartPosition;
+    private Vector3 dragCurrentPosition;
+    private bool snapToPlayer = false;
+    
+    // Identificador único para esta cámara
+    private string cameraId;
+    
+    private void Awake()
+    {
+        // Generar ID único para esta cámara
+        cameraId = System.Guid.NewGuid().ToString().Substring(0, 8);
+        
+        // Asegurar que esta cámara NO se sincroniza por red de ninguna manera
+        Camera cam = GetComponent<Camera>();
+        if (cam != null)
+        {
+            cam.tag = "MainCamera";
+        }
+        
+        // Verificar que no hay componentes de red de Mirror
+        NetworkIdentity networkId = GetComponent<NetworkIdentity>();
+        if (networkId != null)
+        {
+            Debug.LogWarning("[CAMERA] Detectado NetworkIdentity en cámara - Eliminando para evitar sincronización");
+            Destroy(networkId);
+        }
+        
+        // Registrar ID único para debugging
+        gameObject.name = $"LocalCamera_{cameraId}";
+        
+        Debug.Log($"[CAMERA] Inicializando cámara con ID único: {cameraId}");
+    }
+    
+    private void Start()
+    {
+        // Rotación inicial (ajustada a 60 grados para un ángulo más pronunciado)
+        transform.rotation = Quaternion.Euler(cameraPitch, 0f, 0f);
+        
+        // Inicializar posición de la cámara
+        if (target != null)
+        {
+            cameraTargetPosition = target.position;
+        }
+        else
+        {
+            // Sin target, usar posición específica
+            cameraTargetPosition = new Vector3(0f, 10f, -8f);
+        }
+        
+        UpdateCameraPosition(false); // Posicionamiento inmediato
+    }
+    
+    private void LateUpdate()
+    {
+        // Solo actualizar si tenemos un objetivo
+        if (target == null)
+        {
+            return;
+        }
+        
+        // Zoom con rueda del ratón
+        HandleZoom();
+        
+        // Tecla para centrar en jugador
+        if (Input.GetKeyDown(centerOnPlayerKey))
+        {
+            Debug.Log($"[CAMERA_{cameraId}] Centrando cámara en jugador {target.name}");
+            snapToPlayer = true;
+        }
+        
+        // Centrado en jugador
+        if (snapToPlayer)
+        {
+            cameraTargetPosition = Vector3.Lerp(cameraTargetPosition, target.position, snapToTargetSpeed * Time.deltaTime);
+            
+            // Desactivar snap cuando estamos lo suficientemente cerca
+            if (Vector3.Distance(cameraTargetPosition, target.position) < 0.1f)
+            {
+                snapToPlayer = false;
+            }
+        }
+        
+        // Scroll en bordes de pantalla
+        if (useEdgeScrolling && !snapToPlayer)
+        {
+            HandleEdgeScrolling();
+        }
+        
+        // Arrastrar solo con botón MEDIO (no derecho)
+        if (!snapToPlayer)
+        {
+            HandleMouseDrag();
+        }
+        
+        // Aplicar límites del mapa
+        if (useBoundaries)
+        {
+            cameraTargetPosition.x = Mathf.Clamp(cameraTargetPosition.x, mapMinX, mapMaxX);
+            cameraTargetPosition.z = Mathf.Clamp(cameraTargetPosition.z, mapMinZ, mapMaxZ);
+        }
+        
+        // Actualizar posición final
+        UpdateCameraPosition(true);
+    }
+    
+    private void HandleZoom()
+    {
+        // Obtener entrada de la rueda del ratón
+        float scrollInput = Input.GetAxis("Mouse ScrollWheel");
+        
+        if (scrollInput != 0)
+        {
+            // Ajustar el factor de zoom (0-1) basado en la entrada
+            // Positivo = acercar = aumentar factor
+            // Negativo = alejar = disminuir factor
+            float zoomDelta = scrollInput * 0.1f; // Ajustamos sensibilidad
+            
+            // Actualizar factor de zoom (limitado entre 0 y 1)
+            float newZoomFactor = Mathf.Clamp01(currentZoomFactor + zoomDelta);
+            
+            if (Mathf.Abs(newZoomFactor - currentZoomFactor) > 0.001f)
+            {
+                Debug.Log($"[CAMERA_{cameraId}] Zoom Factor: {currentZoomFactor:F2} -> {newZoomFactor:F2}, Input: {scrollInput}");
+                currentZoomFactor = newZoomFactor;
+            }
+        }
+    }
+    
+    private void HandleEdgeScrolling()
+    {
+        if (isDragging) return; // No hacer edge scroll mientras arrastramos
+        
+        Vector3 moveDirection = Vector3.zero;
+        
+        // Bordes horizontales
+        if (Input.mousePosition.x < edgeScrollThreshold)
+        {
+            moveDirection.x = -1;
+        }
+        else if (Input.mousePosition.x > Screen.width - edgeScrollThreshold)
+        {
+            moveDirection.x = 1;
+        }
+        
+        // Bordes verticales
+        if (Input.mousePosition.y < edgeScrollThreshold)
+        {
+            moveDirection.z = -1;
+        }
+        else if (Input.mousePosition.y > Screen.height - edgeScrollThreshold)
+        {
+            moveDirection.z = 1;
+        }
+        
+        if (moveDirection != Vector3.zero)
+        {
+            // Convertir dirección según rotación de cámara
+            moveDirection = Quaternion.Euler(0, transform.eulerAngles.y, 0) * moveDirection;
+            
+            // Aplicar movimiento
+            Vector3 newPosition = cameraTargetPosition + moveDirection.normalized * edgeScrollSpeed * Time.deltaTime;
+            cameraTargetPosition = newPosition;
+        }
+    }
+    
+    private void HandleMouseDrag()
+    {
+        // Iniciar arrastre SOLO con botón medio (rueda) - NO botón derecho
+        if (Input.GetMouseButtonDown((int)cameraDragKey - (int)KeyCode.Mouse0))
+        {
+            isDragging = true;
+            dragStartPosition = Input.mousePosition;
+            dragCurrentPosition = dragStartPosition;
+        }
+        
+        // Actualizar durante arrastre
+        if (isDragging)
+        {
+            dragCurrentPosition = Input.mousePosition;
+            Vector3 difference = dragStartPosition - dragCurrentPosition;
+            
+            if (difference.magnitude > 2) // Pequeño umbral para evitar movimientos accidentales
+            {
+                // Convertir movimiento del ratón a dirección mundial
+                Vector3 dragDirection = new Vector3(difference.x, 0, difference.y) * 0.01f;
+                dragDirection = Quaternion.Euler(0, transform.eulerAngles.y, 0) * dragDirection;
+                
+                // Aplicar movimiento
+                Vector3 newPosition = cameraTargetPosition + dragDirection * edgeScrollSpeed;
+                cameraTargetPosition = newPosition;
+                
+                // Actualizar punto de inicio para el próximo frame
+                dragStartPosition = dragCurrentPosition;
+            }
+        }
+        
+        // Finalizar arrastre SOLO con botón medio (rueda)
+        if (Input.GetMouseButtonUp((int)cameraDragKey - (int)KeyCode.Mouse0))
+        {
+            isDragging = false;
+        }
+    }
+    
+    private void UpdateCameraPosition(bool smooth)
+    {
+        // Calcular altura y distancia basadas en el factor de zoom
+        float currentHeight = Mathf.Lerp(heightZoomRange.x, heightZoomRange.y, currentZoomFactor);
+        float currentDistance = Mathf.Lerp(distanceZoomRange.x, distanceZoomRange.y, currentZoomFactor);
+        
+        // Ajustar ángulo basado en el factor de zoom para un efecto más MOBA
+        float currentPitch = Mathf.Lerp(65f, 55f, currentZoomFactor); // Más cercano = más empinado
+        
+        // Calcular posición deseada usando parámetros actuales
+        Vector3 directionFromTarget = new Vector3(0, 0, -1); // Dirección base (hacia -Z)
+        directionFromTarget = Quaternion.Euler(0, transform.eulerAngles.y, 0) * directionFromTarget;
+        
+        // Aplicar altura y distancia actuales
+        Vector3 desiredPosition = cameraTargetPosition;
+        desiredPosition.y = 0; // Ignorar altura del target
+        desiredPosition += directionFromTarget * currentDistance;
+        desiredPosition.y = currentHeight;
+        
+        // Aplicar movimiento suave o inmediato
+        if (smooth)
+        {
+            transform.position = Vector3.Lerp(transform.position, desiredPosition, Time.deltaTime * 10f);
+        }
+        else
+        {
+            transform.position = desiredPosition;
+        }
+        
+        // Ajustar también el ángulo con el zoom
+        transform.rotation = Quaternion.Lerp(transform.rotation, 
+                                             Quaternion.Euler(currentPitch, transform.eulerAngles.y, 0),
+                                             Time.deltaTime * 5f);
+    }
+    
+    // Método público para asignar un objetivo
+    public void SetTarget(Transform newTarget)
+    {
+        target = newTarget;
+        
+        if (target != null)
+        {
+            Debug.Log($"[CAMERA_{cameraId}] Cámara ahora sigue a {target.name}");
+            
+            // Actualizar posición inmediatamente
+            cameraTargetPosition = target.position;
+            snapToPlayer = true;
+        }
+    }
+    
+    // Método público para obtener el objetivo actual
+    public Transform GetTarget()
+    {
+        return target;
+    }
+    
+    // Método público para centrar en el jugador
+    public void CenterOnPlayer()
+    {
+        if (target != null)
+        {
+            Debug.Log($"[CAMERA_{cameraId}] Centrando manualmente en {target.name}");
+            snapToPlayer = true;
+        }
+    }
+    
+    // Nueva funcionalidad: Método para agregar efecto de cámara shake
+    public void ShakeCamera(float intensity = 0.5f, float duration = 0.5f)
+    {
+        // Iniciar la corrutina de shake
+        StartCoroutine(DoCameraShake(intensity, duration));
+    }
+
+    private System.Collections.IEnumerator DoCameraShake(float intensity, float duration)
+    {
+        // Guardar posición y rotación originales
+        Vector3 originalPosition = transform.position;
+        Quaternion originalRotation = transform.rotation;
+        
+        float elapsed = 0.0f;
+        
+        while (elapsed < duration)
+        {
+            // Generar offset aleatorio de shake
+            float x = Random.Range(-1f, 1f) * intensity;
+            float y = Random.Range(-1f, 1f) * intensity * 0.5f; // Menos shake vertical
+            float z = Random.Range(-1f, 1f) * intensity;
+            
+            // Aplicar offset a la posición
+            transform.position = originalPosition + new Vector3(x, y, z);
+            
+            // También aplicar algo de shake rotacional
+            float pitchShake = Random.Range(-1f, 1f) * intensity * 5f;
+            float yawShake = Random.Range(-1f, 1f) * intensity * 5f;
+            transform.rotation = originalRotation * Quaternion.Euler(pitchShake, yawShake, 0);
+            
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        
+        // Volver a la posición y rotación originales
+        transform.position = originalPosition;
+        transform.rotation = originalRotation;
+    }
+}

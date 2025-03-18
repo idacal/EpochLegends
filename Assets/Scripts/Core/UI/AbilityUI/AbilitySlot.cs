@@ -33,6 +33,9 @@ namespace EpochLegends.Core.UI.Game
         private float lastCooldownValue = -1;
         private bool wasOnCooldown = false;
         
+        // Propiedad para acceder a la habilidad vinculada
+        public BaseAbility LinkedAbility => linkedAbility;
+        
         /// <summary>
         /// Inicializa el slot con una etiqueta de tecla
         /// </summary>

@@ -4,6 +4,7 @@ using EpochLegends.Core.Ability;
 using EpochLegends.Core.Hero;
 using TMPro;
 using UnityEngine.UI;
+using UnityEngine.EventSystems; // Añadida esta directiva using para EventTrigger
 
 namespace EpochLegends.Core.UI.Game
 {
@@ -21,6 +22,14 @@ namespace EpochLegends.Core.UI.Game
         [Header("Mapeo de Teclas")]
         [SerializeField] private KeyCode[] defaultHotkeys = new KeyCode[] { KeyCode.Q, KeyCode.W, KeyCode.E, KeyCode.R, KeyCode.D, KeyCode.F };
         
+        [Header("Tooltip")]
+        [SerializeField] private GameObject tooltipPanel; // Referencia al panel de tooltip
+        [SerializeField] private TextMeshProUGUI tooltipTitleText;
+        [SerializeField] private TextMeshProUGUI tooltipDescriptionText;
+        [SerializeField] private TextMeshProUGUI tooltipCostText;
+        [SerializeField] private TextMeshProUGUI tooltipCooldownText;
+        [SerializeField] private TextMeshProUGUI tooltipLevelText;
+        
         [Header("Personalización")]
         [SerializeField] private bool useHorizontalLayout = true;
         [SerializeField] private int maxSlotsPerRow = 6;
@@ -31,6 +40,19 @@ namespace EpochLegends.Core.UI.Game
         
         // Referencia al héroe actual
         private Hero.Hero currentHero;
+        
+        // Tooltip activo actualmente
+        private BaseAbility currentTooltipAbility;
+        private Vector2 tooltipOffset = new Vector2(20, 20);
+        
+        private void Awake()
+        {
+            // Ocultar tooltip inicialmente
+            if (tooltipPanel != null)
+            {
+                tooltipPanel.SetActive(false);
+            }
+        }
         
         /// <summary>
         /// Configura la UI de habilidades para un héroe específico
@@ -176,17 +198,10 @@ namespace EpochLegends.Core.UI.Game
                     slot.SetAbility(abilities[i]);
                 }
                 
-                // Añadir tooltip si no existe
-                AbilityTooltip tooltip = slotObj.GetComponent<AbilityTooltip>();
-                if (tooltip == null)
-                {
-                    tooltip = slotObj.AddComponent<AbilityTooltip>();
-                }
-                
-                if (tooltip != null && abilities[i] != null)
-                {
-                    tooltip.SetAbility(abilities[i]);
-                }
+                // Configurar eventos para tooltips
+                // En lugar de usar AbilityTooltip, gestionamos los tooltips desde aquí
+                int abilityIndex = i; // Capturar índice para la lambda
+                AddTooltipEvents(slotObj, abilities[i]);
                 
                 // Guardar referencia al slot
                 abilitySlots.Add(slot);
@@ -196,6 +211,157 @@ namespace EpochLegends.Core.UI.Game
             }
             
             Debug.Log($"AbilityUIManager: Creados {abilitySlots.Count} slots de habilidades");
+        }
+        
+        // Añade eventos para mostrar/ocultar tooltips
+        private void AddTooltipEvents(GameObject slotObj, BaseAbility ability)
+        {
+            // Añadir listeners de eventos de ratón
+            EventTrigger trigger = slotObj.GetComponent<EventTrigger>();
+            if (trigger == null)
+            {
+                trigger = slotObj.AddComponent<EventTrigger>();
+            }
+            
+            // Crear lista de triggers si no existe
+            if (trigger.triggers == null)
+            {
+                trigger.triggers = new List<EventTrigger.Entry>();
+            }
+            
+            // Evento de entrada del ratón
+            EventTrigger.Entry entryEnter = new EventTrigger.Entry();
+            entryEnter.eventID = EventTriggerType.PointerEnter;
+            entryEnter.callback.AddListener((data) => { ShowTooltip(ability); });
+            trigger.triggers.Add(entryEnter);
+            
+            // Evento de salida del ratón
+            EventTrigger.Entry entryExit = new EventTrigger.Entry();
+            entryExit.eventID = EventTriggerType.PointerExit;
+            entryExit.callback.AddListener((data) => { HideTooltip(); });
+            trigger.triggers.Add(entryExit);
+        }
+        
+        // Muestra el tooltip con la información de la habilidad
+        private void ShowTooltip(BaseAbility ability)
+        {
+            if (ability == null || tooltipPanel == null) return;
+            
+            currentTooltipAbility = ability;
+            
+            // Actualizar contenido del tooltip
+            UpdateTooltipContent(ability);
+            
+            // Posicionar tooltip cerca del ratón
+            PositionTooltipAtMouse();
+            
+            // Mostrar tooltip
+            tooltipPanel.SetActive(true);
+        }
+        
+        // Oculta el tooltip
+        private void HideTooltip()
+        {
+            if (tooltipPanel != null)
+            {
+                tooltipPanel.SetActive(false);
+                currentTooltipAbility = null;
+            }
+        }
+        
+        // Actualiza el contenido del tooltip para la habilidad dada
+        private void UpdateTooltipContent(BaseAbility ability)
+        {
+            if (ability == null || ability.Definition == null) return;
+            
+            // Actualizar título
+            if (tooltipTitleText != null)
+            {
+                tooltipTitleText.text = ability.Definition.DisplayName;
+            }
+            
+            // Actualizar descripción con valores actuales
+            if (tooltipDescriptionText != null)
+            {
+                string description = ability.Definition.Description;
+                
+                // Reemplazar placeholders con valores reales según nivel
+                description = description.Replace("{damage}", ability.Definition.GetDamageForLevel(ability.Level).ToString("F0"));
+                description = description.Replace("{duration}", ability.Definition.GetDurationForLevel(ability.Level).ToString("F1"));
+                description = description.Replace("{level}", ability.Level.ToString());
+                
+                tooltipDescriptionText.text = description;
+            }
+            
+            // Actualizar costo
+            if (tooltipCostText != null)
+            {
+                float manaCost = ability.Definition.GetManaCostForLevel(ability.Level);
+                tooltipCostText.text = $"Coste: {manaCost} maná";
+                tooltipCostText.gameObject.SetActive(manaCost > 0);
+            }
+            
+            // Actualizar cooldown
+            if (tooltipCooldownText != null)
+            {
+                float cooldown = ability.Definition.GetCooldownForLevel(ability.Level);
+                tooltipCooldownText.text = $"Enfriamiento: {cooldown}s";
+                tooltipCooldownText.gameObject.SetActive(cooldown > 0);
+            }
+            
+            // Actualizar nivel
+            if (tooltipLevelText != null)
+            {
+                tooltipLevelText.text = $"Nivel: {ability.Level} / {ability.Definition.MaxLevel}";
+            }
+        }
+        
+        // Posiciona el tooltip cerca del ratón
+        private void PositionTooltipAtMouse()
+        {
+            if (tooltipPanel == null) return;
+            
+            RectTransform tooltipRect = tooltipPanel.GetComponent<RectTransform>();
+            if (tooltipRect == null) return;
+            
+            // Obtener posición del ratón
+            Vector2 mousePos = Input.mousePosition;
+            
+            // Convertir a posición local en el canvas
+            Canvas canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                Vector2 localPoint;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    canvas.transform as RectTransform,
+                    mousePos,
+                    canvas.worldCamera,
+                    out localPoint);
+                    
+                // Ajustar posición para que no se salga de la pantalla
+                Vector2 tooltipSize = tooltipRect.sizeDelta;
+                
+                if (localPoint.x + tooltipSize.x > (canvas.transform as RectTransform).rect.width / 2)
+                {
+                    localPoint.x = localPoint.x - tooltipSize.x - tooltipOffset.x;
+                }
+                else
+                {
+                    localPoint.x = localPoint.x + tooltipOffset.x;
+                }
+                
+                if (localPoint.y - tooltipSize.y < -(canvas.transform as RectTransform).rect.height / 2)
+                {
+                    localPoint.y = localPoint.y + tooltipSize.y + tooltipOffset.y;
+                }
+                else
+                {
+                    localPoint.y = localPoint.y - tooltipOffset.y;
+                }
+                
+                // Establecer posición
+                tooltipRect.anchoredPosition = localPoint;
+            }
         }
         
         /// <summary>
@@ -213,14 +379,13 @@ namespace EpochLegends.Core.UI.Game
                 if (abilities[i] != null)
                 {
                     abilitySlots[i].UpdateCooldown(abilities[i]);
-                    
-                    // También actualizar tooltip si ha cambiado el nivel
-                    AbilityTooltip tooltip = abilitySlots[i].GetComponent<AbilityTooltip>();
-                    if (tooltip != null)
-                    {
-                        tooltip.UpdateTooltipContent();
-                    }
                 }
+            }
+            
+            // Si el tooltip está visible, actualizar su contenido 
+            if (tooltipPanel != null && tooltipPanel.activeSelf && currentTooltipAbility != null)
+            {
+                UpdateTooltipContent(currentTooltipAbility);
             }
         }
         
@@ -239,6 +404,12 @@ namespace EpochLegends.Core.UI.Game
             if (currentHero != null)
             {
                 UpdateAbilitySlots();
+            }
+            
+            // Si el tooltip está visible, actualizar su posición si sigue al ratón
+            if (tooltipPanel != null && tooltipPanel.activeSelf)
+            {
+                PositionTooltipAtMouse();
             }
         }
         

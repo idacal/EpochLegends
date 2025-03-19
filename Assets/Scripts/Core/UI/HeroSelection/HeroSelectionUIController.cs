@@ -534,110 +534,122 @@ namespace EpochLegends.UI.HeroSelection
         #region Player Selection Display
         
         private void UpdatePlayerSelections()
-        {
-            if (!managersFound || teamPanels == null || teamPanels.Length < 2 || selectionManager == null)
-                return;
-                
-            // In a real implementation, you'd get all connected players and their selections
-            // For now, we're using a simplified approach
+{
+    if (!managersFound || teamPanels == null || teamPanels.Length < 2 || selectionManager == null)
+        return;
             
-            // This would iterate through all connected players
-            // For networked mode, you'd get this from GameManager
-            var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
-            
-            if (connectedPlayers != null && connectedPlayers.Count > 0)
-            {
-                // Clear existing player entries
-                ClearPlayerSelections();
-                
-                foreach (var playerEntry in connectedPlayers)
-                {
-                    uint netId = playerEntry.Key;
-                    var playerInfo = playerEntry.Value;
-                    
-                    // Get player name - could get from identity
-                    string playerName = "Player " + netId;
-                    
-                    // Determine if local player
-                    bool isLocalPlayer = (NetworkClient.localPlayer != null && 
-                                          NetworkClient.localPlayer.netId == netId);
-                    
-                    // Get selected hero if any
-                    HeroDefinition selectedHero = null;
-                    if (!string.IsNullOrEmpty(playerInfo.SelectedHeroId) && heroRegistry != null)
-                    {
-                        selectedHero = heroRegistry.GetHeroById(playerInfo.SelectedHeroId);
-                    }
-                    
-                    // Create/update player entry
-                    CreatePlayerSelectionDisplay(
-                        netId,
-                        playerName,
-                        playerInfo.TeamId,
-                        playerInfo.SelectedHeroId,
-                        isLocalPlayer
-                    );
-                    
-                    // Update ready status
-                    if (playerSelections.TryGetValue(netId, out PlayerSelectionDisplay display))
-                    {
-                        display.SetReadyStatus(playerInfo.IsReady);
-                        
-                        // Update local ready state if this is local player
-                        if (isLocalPlayer)
-                        {
-                            isReady = playerInfo.IsReady;
-                            UpdateReadyButtonText();
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Fallback to dummy data for testing
-                CreateDummyPlayerSelections();
-            }
-        }
+    // In a real implementation, you'd get all connected players and their selections
+    // For now, we're using a simplified approach
+    
+    // This would iterate through all connected players
+    // For networked mode, you'd get this from GameManager
+    var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
+    
+    if (connectedPlayers != null && connectedPlayers.Count > 0)
+    {
+        // Clear existing player entries
+        ClearPlayerSelections();
         
-        private void CreatePlayerSelectionDisplay(uint netId, string playerName, int teamId, string heroId, bool isLocalPlayer)
+        foreach (var playerEntry in connectedPlayers)
         {
-            // Validate team ID (1-based in our system)
-            int teamIndex = teamId - 1;
-            if (teamIndex < 0 || teamIndex >= teamPanels.Length || teamPanels[teamIndex] == null)
-                teamIndex = 0;
-
-            Transform parentPanel = teamPanels[teamIndex];
+            uint netId = playerEntry.Key;
+            var playerInfo = playerEntry.Value;
             
-            if (playerSelectionPrefab != null)
+            // Get player name from PlayerInfo
+            string playerName = !string.IsNullOrEmpty(playerInfo.PlayerName) ? 
+                playerInfo.PlayerName : "Player " + netId;
+            
+            // Determine if local player
+            bool isLocalPlayer = (NetworkClient.localPlayer != null && 
+                                  NetworkClient.localPlayer.netId == netId);
+            
+            // Get selected hero if any
+            HeroDefinition selectedHero = null;
+            if (!string.IsNullOrEmpty(playerInfo.SelectedHeroId) && heroRegistry != null)
             {
-                GameObject displayObj = Instantiate(playerSelectionPrefab, parentPanel);
-                PlayerSelectionDisplay display = displayObj.GetComponent<PlayerSelectionDisplay>();
+                selectedHero = heroRegistry.GetHeroById(playerInfo.SelectedHeroId);
+            }
+            
+            // Create/update player entry
+            CreatePlayerSelectionDisplay(
+                netId,
+                playerName,
+                playerInfo.TeamId,
+                playerInfo.SelectedHeroId,
+                isLocalPlayer
+            );
+            
+            // Update ready status
+            if (playerSelections.TryGetValue(netId, out PlayerSelectionDisplay display))
+            {
+                display.SetReadyStatus(playerInfo.IsReady);
                 
-                if (display != null)
+                // Update local ready state if this is local player
+                if (isLocalPlayer)
                 {
-                    // Get hero definition if hero ID is provided
-                    HeroDefinition hero = null;
-                    if (!string.IsNullOrEmpty(heroId) && heroRegistry != null)
-                    {
-                        hero = heroRegistry.GetHeroById(heroId);
-                        if (hero == null)
-                        {
-                            Debug.LogError($"No se encontró definición de héroe para ID: {heroId}");
-                        }
-                    }
-                    
-                    display.Initialize(playerName, isLocalPlayer, hero);
-                    display.SetPlayerNetId(netId);
-                    playerSelections[netId] = display;
-                    
-                    // Verificar que la UI se actualizó correctamente
-                    if (enableDebugLogs)
-                    {
-                        Debug.LogError($"Creado display para jugador {netId} (equipo {teamId}), héroe: {(hero != null ? hero.DisplayName : "ninguno")}");
-                    }
+                    isReady = playerInfo.IsReady;
+                    UpdateReadyButtonText();
                 }
             }
         }
+    }
+    else
+    {
+        // Fallback to dummy data for testing
+        CreateDummyPlayerSelections();
+    }
+}
+        
+       private void CreatePlayerSelectionDisplay(uint netId, string playerName, int teamId, string heroId, bool isLocalPlayer)
+{
+    // Validate team ID (1-based in our system)
+    int teamIndex = teamId - 1;
+    if (teamIndex < 0 || teamIndex >= teamPanels.Length || teamPanels[teamIndex] == null)
+        teamIndex = 0;
+
+    Transform parentPanel = teamPanels[teamIndex];
+    
+    if (playerSelectionPrefab != null)
+    {
+        GameObject displayObj = Instantiate(playerSelectionPrefab, parentPanel);
+        PlayerSelectionDisplay display = displayObj.GetComponent<PlayerSelectionDisplay>();
+        
+        if (display != null)
+        {
+            // Obtener nombre del jugador desde GameManager si está disponible
+            string displayName = playerName;
+            var connectedPlayers = EpochLegends.GameManager.Instance?.ConnectedPlayers;
+            if (connectedPlayers != null && connectedPlayers.TryGetValue(netId, out PlayerInfo playerInfo))
+            {
+                if (!string.IsNullOrEmpty(playerInfo.PlayerName))
+                {
+                    displayName = playerInfo.PlayerName;
+                }
+            }
+            
+            // Get hero definition if hero ID is provided
+            HeroDefinition hero = null;
+            if (!string.IsNullOrEmpty(heroId) && heroRegistry != null)
+            {
+                hero = heroRegistry.GetHeroById(heroId);
+                if (hero == null)
+                {
+                    Debug.LogError($"No se encontró definición de héroe para ID: {heroId}");
+                }
+            }
+            
+            display.Initialize(displayName, isLocalPlayer, hero);
+            display.SetPlayerNetId(netId);
+            playerSelections[netId] = display;
+            
+            // Verificar que la UI se actualizó correctamente
+            if (enableDebugLogs)
+            {
+                Debug.LogError($"Creado display para jugador {netId} (equipo {teamId}), nombre: {displayName}, héroe: {(hero != null ? hero.DisplayName : "ninguno")}");
+            }
+        }
+    }
+}
         
         private void UpdateLocalPlayerSelectionUI()
         {

@@ -207,12 +207,13 @@ namespace EpochLegends.Core.UI.Lobby
                     uint netId = playerEntry.Key;
                     var playerInfo = playerEntry.Value;
                     
-                    // Get player name - either from NetworkIdentity or fallback to "Player X"
-                    string playerName = "Player " + netId;
+                    // Usar el nombre del jugador de PlayerInfo
+                    string playerName = playerInfo.PlayerName;
                     
-                    if (NetworkClient.spawned.TryGetValue(netId, out NetworkIdentity identity))
+                    // Si no hay nombre, utilizar un respaldo
+                    if (string.IsNullOrEmpty(playerName))
                     {
-                        playerName = identity.gameObject.name;
+                        playerName = "Player " + netId;
                     }
                     
                     // Determine if this is the local player

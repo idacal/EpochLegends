@@ -16,6 +16,9 @@ namespace EpochLegends.Core.UI.Menu
         [SerializeField] private GameObject joinPanel;
         [SerializeField] private GameObject serverBrowserPanel;
         
+        [Header("Player Settings")]
+        [SerializeField] private TMP_InputField playerNameInput;
+        
         [Header("Host Game Settings")]
         [SerializeField] private TMP_InputField hostGameNameInput;
         [SerializeField] private TMP_InputField hostPasswordInput;
@@ -32,6 +35,9 @@ namespace EpochLegends.Core.UI.Menu
         [SerializeField] private GameObject serverItemPrefab;
         [SerializeField] private Button refreshServersButton;
         [SerializeField] private NetworkDiscovery networkDiscovery;
+        
+        [Header("Debug")]
+        [SerializeField] private bool debugUI = false;
         
         private EpochNetworkManager networkManager;
         private Dictionary<long, ServerResponse> discoveredServers = new Dictionary<long, ServerResponse>();
@@ -54,6 +60,15 @@ namespace EpochLegends.Core.UI.Menu
             }
             
             // Set default values
+            if (playerNameInput != null)
+            {
+                string savedName = PlayerPrefs.GetString("PlayerName", "Player" + Random.Range(1000, 9999));
+                playerNameInput.text = savedName;
+                
+                if (debugUI)
+                    Debug.Log($"[MainMenuController] Loaded player name: {savedName}");
+            }
+            
             if (maxPlayersInput != null)
                 maxPlayersInput.text = "10";
                 
@@ -193,6 +208,21 @@ namespace EpochLegends.Core.UI.Menu
         {
             if (networkManager == null) return;
             
+            // Get player name
+            string playerName = playerNameInput != null ? playerNameInput.text : "Player" + Random.Range(1000, 9999);
+            
+            // Validar nombre del jugador
+            if (string.IsNullOrWhiteSpace(playerName))
+                playerName = "Player" + Random.Range(1000, 9999);
+                
+            // Limitar longitud
+            if (playerName.Length > 20)
+                playerName = playerName.Substring(0, 20);
+            
+            // Guardar nombre para futuras sesiones
+            PlayerPrefs.SetString("PlayerName", playerName);
+            PlayerPrefs.Save();
+            
             // Get server settings
             string serverName = hostGameNameInput != null ? hostGameNameInput.text : "Epoch Legends Server";
             string password = hostPasswordInput != null ? hostPasswordInput.text : "";
@@ -204,7 +234,7 @@ namespace EpochLegends.Core.UI.Menu
                 maxPlayers = Mathf.Clamp(parsedMaxPlayers, 2, 20);
             }
             
-            Debug.Log($"Creating server: {serverName}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxPlayers}");
+            Debug.Log($"Creating server: {serverName}, Player: {playerName}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxPlayers}");
             
             // Start hosting
             networkManager.StartHost(serverName, password, maxPlayers);
@@ -217,11 +247,26 @@ namespace EpochLegends.Core.UI.Menu
         {
             if (networkManager == null) return;
             
+            // Get player name
+            string playerName = playerNameInput != null ? playerNameInput.text : "Player" + Random.Range(1000, 9999);
+            
+            // Validar nombre del jugador
+            if (string.IsNullOrWhiteSpace(playerName))
+                playerName = "Player" + Random.Range(1000, 9999);
+                
+            // Limitar longitud
+            if (playerName.Length > 20)
+                playerName = playerName.Substring(0, 20);
+            
+            // Guardar nombre para futuras sesiones
+            PlayerPrefs.SetString("PlayerName", playerName);
+            PlayerPrefs.Save();
+            
             // Get connection settings
             string address = joinIPInput != null ? joinIPInput.text : "localhost";
             string password = joinPasswordInput != null ? joinPasswordInput.text : "";
             
-            Debug.Log($"Joining server at: {address}");
+            Debug.Log($"Joining server at: {address}, Player: {playerName}");
             
             // Join game
             networkManager.JoinGame(address, password);
@@ -309,7 +354,20 @@ namespace EpochLegends.Core.UI.Menu
         {
             if (networkManager == null) return;
             
-            Debug.Log($"Joining server from browser: {info.uri}");
+            // Get player name first
+            string playerName = playerNameInput != null ? playerNameInput.text : "Player" + Random.Range(1000, 9999);
+            
+            // Validar y guardar nombre del jugador
+            if (string.IsNullOrWhiteSpace(playerName))
+                playerName = "Player" + Random.Range(1000, 9999);
+                
+            if (playerName.Length > 20)
+                playerName = playerName.Substring(0, 20);
+                
+            PlayerPrefs.SetString("PlayerName", playerName);
+            PlayerPrefs.Save();
+            
+            Debug.Log($"Joining server from browser: {info.uri}, Player: {playerName}");
             
             // Connect to the selected server
             networkManager.networkAddress = info.uri.Host;

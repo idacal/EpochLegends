@@ -440,12 +440,18 @@ namespace EpochLegends.UI.Lobby
             foreach (var kvp in connectedPlayers)
             {
                 uint netId = kvp.Key;
-                string playerName = "Player " + netId;
+                string playerName = kvp.Value.PlayerName;
                 
-                // Try to get a better name from NetworkIdentity
-                if (NetworkClient.spawned.TryGetValue(netId, out NetworkIdentity identity))
+                // Si el nombre está vacío, usar un nombre por defecto
+                if (string.IsNullOrEmpty(playerName))
                 {
-                    playerName = identity.gameObject.name;
+                    playerName = "Player " + netId;
+                    
+                    // Intentar obtener un nombre mejor del NetworkIdentity
+                    if (NetworkClient.spawned.TryGetValue(netId, out NetworkIdentity identity))
+                    {
+                        playerName = identity.gameObject.name;
+                    }
                 }
                 
                 bool isHost = NetworkServer.active && NetworkClient.localPlayer != null && 
@@ -506,37 +512,47 @@ namespace EpochLegends.UI.Lobby
         }
 
         private void CreatePlayerEntry(PlayerUIInfo info)
-        {
-            // Asigna el contenedor según el equipo (suponiendo que teamContainers[0] es equipo 1 y [1] equipo 2)
-            int teamIndex = info.TeamId - 1;
-            if (teamIndex < 0 || teamIndex >= teamContainers.Length)
-                teamIndex = 0;
+{
+    // Asigna el contenedor según el equipo (suponiendo que teamContainers[0] es equipo 1 y [1] equipo 2)
+    int teamIndex = info.TeamId - 1;
+    if (teamIndex < 0 || teamIndex >= teamContainers.Length)
+        teamIndex = 0;
 
-            if (playerEntryPrefab != null && teamContainers[teamIndex] != null)
+    if (playerEntryPrefab != null && teamContainers[teamIndex] != null)
+    {
+        GameObject entry = Instantiate(playerEntryPrefab, teamContainers[teamIndex]);
+        
+        // Primero intentar encontrar TextMeshProUGUI (nueva UI)
+        TextMeshProUGUI tmpText = entry.GetComponentInChildren<TextMeshProUGUI>();
+        if (tmpText != null)
+        {
+            tmpText.text = info.PlayerName + (info.IsHost ? " (Host)" : "") +
+                          (info.IsReady ? " - Ready" : " - Not Ready");
+        }
+        else
+        {
+            // Si no hay TMP, buscar el Text tradicional
+            Text entryText = entry.GetComponentInChildren<Text>();
+            if (entryText != null)
             {
-                GameObject entry = Instantiate(playerEntryPrefab, teamContainers[teamIndex]);
-                
-                // Update the entry based on your prefab structure
-                Text entryText = entry.GetComponentInChildren<Text>();
-                if (entryText != null)
-                {
-                    entryText.text = info.PlayerName + (info.IsHost ? " (Host)" : "") +
-                                    (info.IsReady ? " - Ready" : " - Not Ready");
-                }
-                
-                // If you have a ready indicator, update it
-                Transform readyIndicator = entry.transform.Find("ReadyIndicator");
-                if (readyIndicator != null)
-                {
-                    readyIndicator.gameObject.SetActive(info.IsReady);
-                }
-                
-                playerEntries[info.NetId] = entry;
-                
-                if (debugUpdates)
-                    Debug.Log($"[LobbyController] Created UI entry for player {info.NetId} on team {info.TeamId}");
+                entryText.text = info.PlayerName + (info.IsHost ? " (Host)" : "") +
+                                (info.IsReady ? " - Ready" : " - Not Ready");
             }
         }
+        
+        // If you have a ready indicator, update it
+        Transform readyIndicator = entry.transform.Find("ReadyIndicator");
+        if (readyIndicator != null)
+        {
+            readyIndicator.gameObject.SetActive(info.IsReady);
+        }
+        
+        playerEntries[info.NetId] = entry;
+        
+        if (debugUpdates)
+            Debug.Log($"[LobbyController] Created UI entry for player {info.NetId} ({info.PlayerName}) on team {info.TeamId}");
+    }
+}
 
         private bool CheckAllPlayersReady()
         {

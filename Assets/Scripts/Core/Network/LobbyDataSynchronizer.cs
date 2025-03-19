@@ -202,13 +202,43 @@ namespace EpochLegends.Core.Network
                 
                 foreach (var player in connectedPlayers)
                 {
-                    string playerName = "Player " + player.Key;
+                    // Obtener el nombre del jugador - primero del PlayerInfo
+                    string playerName = player.Value.PlayerName;
                     
-                    // Intentar obtener un mejor nombre del NetworkIdentity
-                    if (NetworkServer.spawned.TryGetValue(player.Key, out NetworkIdentity identity))
+                    // Si está vacío, buscar alternativas
+                    if (string.IsNullOrEmpty(playerName))
                     {
-                        playerName = identity.gameObject.name;
+                        // Intentar obtener un mejor nombre del NetworkIdentity
+                        if (NetworkServer.spawned.TryGetValue(player.Key, out NetworkIdentity identity))
+                        {
+                            // Intentar obtener de PlayerNetwork
+                            var playerNetwork = identity.GetComponent<PlayerNetwork>();
+                            if (playerNetwork != null && !string.IsNullOrEmpty(playerNetwork.playerName))
+                            {
+                                playerName = playerNetwork.playerName;
+                                
+                                // IMPORTANTE: También actualizar el nombre en GameManager
+                                // para futura referencia
+                                if (EpochLegends.GameManager.Instance != null)
+                                {
+                                    EpochLegends.GameManager.Instance.UpdatePlayerName(player.Key, playerName);
+                                }
+                            }
+                            else
+                            {
+                                // Usar nombre del objeto como último recurso
+                                playerName = identity.gameObject.name;
+                            }
+                        }
+                        else
+                        {
+                            // Si no se puede encontrar un nombre, usar "Player + netId" como respaldo
+                            playerName = "Player " + player.Key;
+                        }
                     }
+                    
+                    if (debugSync)
+                        Debug.Log($"[LobbySync] Player {player.Key} name: {playerName}, team: {player.Value.TeamId}, ready: {player.Value.IsReady}");
                     
                     playerDataList.Add(new SyncPlayerData
                     {

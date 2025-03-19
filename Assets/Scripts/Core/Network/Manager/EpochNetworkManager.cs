@@ -15,6 +15,9 @@ namespace EpochLegends.Core.Network.Manager
         [SerializeField] private int maxPlayers = 10;
         [SerializeField] private bool debugNetwork = true;
 
+        // Añadir campo para almacenar el nombre del jugador
+        [HideInInspector] public string playerName = "";
+
         // Evento para notificar actualizaciones del estado del juego
         // Este es un cambio clave para un enfoque dirigido por eventos
         public delegate void GameStateUpdateEvent();
@@ -57,8 +60,11 @@ namespace EpochLegends.Core.Network.Manager
             serverPassword = password;
             maxPlayers = maxConnections;
             
+            // Obtener el nombre del jugador de PlayerPrefs
+            playerName = PlayerPrefs.GetString("PlayerName", "Player" + Random.Range(1000, 9999));
+            
             if (debugNetwork)
-                Debug.Log($"[NetworkManager] Starting host: {name}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxConnections}");
+                Debug.Log($"[NetworkManager] Starting host: {name}, Player: {playerName}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxConnections}");
             
             // Limpiar cualquier manejador existente para prevenir duplicados
             NetworkServer.UnregisterHandler<ServerPasswordMessage>();
@@ -78,8 +84,11 @@ namespace EpochLegends.Core.Network.Manager
             networkAddress = address;
             serverPassword = password;
             
+            // Obtener el nombre del jugador de PlayerPrefs
+            playerName = PlayerPrefs.GetString("PlayerName", "Player" + Random.Range(1000, 9999));
+            
             if (debugNetwork)
-                Debug.Log($"[NetworkManager] Joining game at: {address}");
+                Debug.Log($"[NetworkManager] Joining game at: {address}, Player: {playerName}");
                 
             StartClient();
         }
@@ -107,6 +116,18 @@ namespace EpochLegends.Core.Network.Manager
             
             if (debugNetwork)
                 Debug.Log($"[NetworkManager] Player added to server. Connection ID: {conn.connectionId}");
+            
+            // Encontrar el componente PlayerNetwork para establecer el nombre
+            if (conn.identity != null)
+            {
+                var playerNetwork = conn.identity.GetComponent<PlayerNetwork>();
+                if (playerNetwork != null && playerNetwork.playerName == "")
+                {
+                    // Si el componente existe pero el nombre está vacío, establecerlo desde PlayerPrefs
+                    // Esto cubre el caso del host, que ya tiene el nombre establecido
+                    playerNetwork.playerName = playerName;
+                }
+            }
                 
             // Notify GameManager about new player
             EpochLegends.GameManager.Instance?.OnPlayerJoined(conn);

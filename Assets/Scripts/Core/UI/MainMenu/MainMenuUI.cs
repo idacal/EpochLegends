@@ -7,6 +7,9 @@ namespace EpochLegends.Core.UI.MainMenu
 {
     public class MainMenuUI : MonoBehaviour
     {
+        [Header("Player Settings")]
+        [SerializeField] private InputField playerNameInput;
+
         [Header("Host Game Panel")]
         [SerializeField] private InputField serverNameInput;
         [SerializeField] private InputField serverPasswordInput;
@@ -23,9 +26,18 @@ namespace EpochLegends.Core.UI.MainMenu
         [SerializeField] private Button settingsButton;
         [SerializeField] private Button quitButton;
         
+        [Header("Debug")]
+        [SerializeField] private bool debugUI = false;
+        
         private void Start()
         {
+            // Cargar nombre guardado si existe
+            string savedPlayerName = PlayerPrefs.GetString("PlayerName", "Player" + Random.Range(1000, 9999));
+            
             // Initialize UI
+            if (playerNameInput != null)
+                playerNameInput.text = savedPlayerName;
+            
             if (serverNameInput != null)
                 serverNameInput.text = "Epoch Legends Server";
                 
@@ -35,6 +47,9 @@ namespace EpochLegends.Core.UI.MainMenu
                 maxPlayersSlider.onValueChanged.AddListener(OnMaxPlayersChanged);
                 UpdateMaxPlayersText(10);
             }
+            
+            if (debugUI)
+                Debug.Log($"[MainMenuUI] Initialized with player name: {savedPlayerName}");
             
             // Setup button listeners
             if (hostGameButton != null)
@@ -64,11 +79,24 @@ namespace EpochLegends.Core.UI.MainMenu
         
         private void OnHostGameClicked()
         {
+            string playerName = playerNameInput != null ? playerNameInput.text : "Player" + Random.Range(1000, 9999);
             string serverName = serverNameInput != null ? serverNameInput.text : "Epoch Legends Server";
             string password = serverPasswordInput != null ? serverPasswordInput.text : "";
             int maxPlayers = maxPlayersSlider != null ? Mathf.RoundToInt(maxPlayersSlider.value) : 10;
             
-            Debug.Log($"Starting host: {serverName}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxPlayers}");
+            // Validar nombre del jugador
+            if (string.IsNullOrWhiteSpace(playerName))
+                playerName = "Player" + Random.Range(1000, 9999);
+                
+            // Limitar longitud
+            if (playerName.Length > 20)
+                playerName = playerName.Substring(0, 20);
+            
+            // Guardar nombre para futuras sesiones
+            PlayerPrefs.SetString("PlayerName", playerName);
+            PlayerPrefs.Save();
+            
+            Debug.Log($"Starting host: {serverName}, Player: {playerName}, Password: {!string.IsNullOrEmpty(password)}, Max Players: {maxPlayers}");
             
             // Start the host
             if (EpochNetworkManager.Instance != null)
@@ -83,10 +111,23 @@ namespace EpochLegends.Core.UI.MainMenu
         
         private void OnJoinGameClicked()
         {
+            string playerName = playerNameInput != null ? playerNameInput.text : "Player" + Random.Range(1000, 9999);
             string address = joinAddressInput != null ? joinAddressInput.text : "localhost";
             string password = joinPasswordInput != null ? joinPasswordInput.text : "";
             
-            Debug.Log($"Joining game at address: {address}");
+            // Validar nombre del jugador
+            if (string.IsNullOrWhiteSpace(playerName))
+                playerName = "Player" + Random.Range(1000, 9999);
+                
+            // Limitar longitud
+            if (playerName.Length > 20)
+                playerName = playerName.Substring(0, 20);
+            
+            // Guardar nombre para futuras sesiones
+            PlayerPrefs.SetString("PlayerName", playerName);
+            PlayerPrefs.Save();
+            
+            Debug.Log($"Joining game at address: {address}, Player: {playerName}");
             
             // Join the game
             if (EpochNetworkManager.Instance != null)

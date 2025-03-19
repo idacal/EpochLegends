@@ -29,6 +29,7 @@ namespace EpochLegends
         public uint NetId;
         public bool IsReady;
         public int TeamId;
+        public string PlayerName;      // Añadido: nombre del jugador
         public string SelectedHeroId;
         public int Kills;
         public int Deaths;
@@ -110,7 +111,7 @@ namespace EpochLegends
                 DontDestroyOnLoad(gameObject);
                 
                 if (enableDebugLogs)
-                    Debug.LogError("[GameManager] Configurado para persistir entre escenas");
+                    Debug.Log("[GameManager] Configurado para persistir entre escenas");
             }
             
             if (enableDebugLogs)
@@ -207,7 +208,7 @@ namespace EpochLegends
                     _stateTimer -= Time.deltaTime;
                     if (_stateTimer <= 0f)
                     {
-                        Debug.LogError("[GameManager] Timer de selección de héroes llegó a cero - iniciando juego");
+                        Debug.Log("[GameManager] Timer de selección de héroes llegó a cero - iniciando juego");
                         StartGame();
                     }
                     break;
@@ -242,21 +243,37 @@ namespace EpochLegends
             
             if (!_connectedPlayers.ContainsKey(netId))
             {
+                // Intentar obtener el nombre del jugador
+                string playerName = "Player " + netId;
+                
+                // Buscar componente PlayerNetwork para obtener el nombre
+                var playerComp = conn.identity.GetComponent<PlayerNetwork>();
+                if (playerComp != null && !string.IsNullOrEmpty(playerComp.playerName))
+                {
+                    playerName = playerComp.playerName;
+                }
+                else if (EpochNetworkManager.Instance != null && !string.IsNullOrEmpty(EpochNetworkManager.Instance.playerName))
+                {
+                    // Intentar obtener el nombre del NetworkManager como respaldo
+                    playerName = EpochNetworkManager.Instance.playerName;
+                }
+                
                 var playerInfo = new PlayerInfo
                 {
                     NetId = netId,
                     IsReady = false,
-                    TeamId = AssignTeam()
+                    TeamId = AssignTeam(),
+                    PlayerName = playerName
                 };
                 
                 // Add to SyncDictionary to automatically sync to clients
                 _connectedPlayers[netId] = playerInfo;
                 
                 if (enableDebugLogs)
-                    Debug.Log($"[GameManager] Player joined. NetId: {netId}, Total players: {_connectedPlayers.Count}");
+                    Debug.Log($"[GameManager] Player joined. NetId: {netId}, Name: {playerName}, Total players: {_connectedPlayers.Count}");
                 
                 // Explicitly notify all clients about the player joining
-                RpcPlayerJoined(netId, playerInfo.TeamId);
+                RpcPlayerJoined(netId, playerInfo.TeamId, playerName);
                 
                 // Send the full state to the new client specifically
                 SendStateToClient(conn);
@@ -300,10 +317,10 @@ namespace EpochLegends
                     _connectionToNetId.Remove(conn);
                     
                     if (enableDebugLogs)
-                        Debug.Log($"[GameManager] Player left. NetId: {netId}, Total players: {_connectedPlayers.Count}");
+                        Debug.Log($"[GameManager] Player left. NetId: {netId}, Name: {playerInfo.PlayerName}, Total players: {_connectedPlayers.Count}");
                     
                     // Notify all clients about player leaving
-                    RpcPlayerLeft(netId, playerInfo.TeamId);
+                    RpcPlayerLeft(netId, playerInfo.TeamId, playerInfo.PlayerName);
                     
                     // Trigger UI refresh after a short delay
                     Invoke(nameof(TriggerUIRefreshForAllClients), 0.5f);
@@ -323,7 +340,7 @@ namespace EpochLegends
                 _connectedPlayers[netId] = playerInfo;
 
                 if (enableDebugLogs)
-                    Debug.Log($"[GameManager] Player {netId} ready state set to {isReady}");
+                    Debug.Log($"[GameManager] Player {netId} ({playerInfo.PlayerName}) ready state set to {isReady}");
                 
                 // Notify all clients about player ready state change
                 RpcPlayerReadyChanged(netId, isReady);
@@ -348,12 +365,12 @@ namespace EpochLegends
         }
 
         [ClientRpc]
-        private void RpcPlayerJoined(uint playerNetId, int teamId)
+        private void RpcPlayerJoined(uint playerNetId, int teamId, string playerName)
         {
             if (this == null || !isActiveAndEnabled) return;
             
             if (enableDebugLogs)
-                Debug.Log($"[GameManager] RPC: Player {playerNetId} joined team {teamId}");
+                Debug.Log($"[GameManager] RPC: Player {playerNetId} ({playerName}) joined team {teamId}");
                 
             // No need to update dictionary here - it's already synced via SyncDictionary
             // This RPC ensures all clients are notified, including the host
@@ -363,12 +380,12 @@ namespace EpochLegends
         }
         
         [ClientRpc]
-        private void RpcPlayerLeft(uint playerNetId, int teamId)
+        private void RpcPlayerLeft(uint playerNetId, int teamId, string playerName)
         {
             if (this == null || !isActiveAndEnabled) return;
             
             if (enableDebugLogs)
-                Debug.Log($"[GameManager] RPC: Player {playerNetId} left from team {teamId}");
+                Debug.Log($"[GameManager] RPC: Player {playerNetId} ({playerName}) left from team {teamId}");
                 
             // No need to update dictionary here - it's already synced via SyncDictionary
             // This RPC ensures all clients are notified, including the host
@@ -430,7 +447,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.LogError($"[GameManager] Game state changed from {oldState} to {newState}");
+            Debug.Log($"[GameManager] Game state changed from {oldState} to {newState}");
                 
             // Notify subscribers that game state has changed
             if (isClient)
@@ -488,7 +505,7 @@ namespace EpochLegends
             // Notificar a los clientes sobre el cambio de estado
             RpcGameStateChanged(_currentState);
             
-            Debug.LogError("Starting hero selection phase with delay");
+            Debug.Log("Starting hero selection phase with delay");
             
             // Añadir un retraso antes de cambiar la escena
             StartCoroutine(DelayedSceneChange(heroSelectionScene, 1.0f));
@@ -507,7 +524,7 @@ namespace EpochLegends
             try
             {
                 // Cambiar la escena
-                Debug.LogError($"Cambiando a escena: {sceneName}");
+                Debug.Log($"Cambiando a escena: {sceneName}");
                 NetworkManager.singleton.ServerChangeScene(sceneName);
             }
             catch (System.Exception ex)
@@ -521,14 +538,14 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.LogError("GAMEMANAGER: StartGame llamado");
+            Debug.Log("GAMEMANAGER: StartGame llamado");
             _currentState = GameState.Playing;
             
             // Notify all clients about the state change
             RpcGameStateChanged(_currentState);
             
             // Mostrar información de la escena que vamos a cargar
-            Debug.LogError($"Intentando cambiar a escena: {gameplayScene}");
+            Debug.Log($"Intentando cambiar a escena: {gameplayScene}");
             if (string.IsNullOrEmpty(gameplayScene))
             {
                 Debug.LogError("ERROR: gameplayScene está vacío!");
@@ -542,12 +559,12 @@ namespace EpochLegends
             if (NetworkManager.singleton != null && NetworkManager.singleton is Mirror.NetworkManager netManager)
             {
                 if (netManager.onlineScene != null)
-                    Debug.LogError($"NetworkManager.onlineScene: {netManager.onlineScene}");
+                    Debug.Log($"NetworkManager.onlineScene: {netManager.onlineScene}");
                     
                 // Si la escena no está configurada en NetworkManager, intentar cambiarla manualmente
                 if (string.IsNullOrEmpty(netManager.onlineScene) || !netManager.onlineScene.Contains(gameplayScene))
                 {
-                    Debug.LogError($"La escena {gameplayScene} no está configurada en NetworkManager. Configurando manualmente.");
+                    Debug.Log($"La escena {gameplayScene} no está configurada en NetworkManager. Configurando manualmente.");
                     netManager.onlineScene = gameplayScene;
                 }
             }
@@ -565,7 +582,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.LogError("[GameManager] Preparando para cambio de escena");
+            Debug.Log("[GameManager] Preparando para cambio de escena");
             
             // Desactivar controladores que podrían causar problemas
             var lobbyController = FindObjectOfType<EpochLegends.UI.Lobby.LobbyController>();
@@ -610,7 +627,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.LogError($"[GameManager] Game state changed to {newState}");
+            Debug.Log($"[GameManager] Game state changed to {newState}");
                 
             // This RPC explicitly notifies clients about state changes
             // Notify subscribers that game state has changed
@@ -622,7 +639,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.LogError("[GameManager] ReturnToLobby llamado");
+            Debug.Log("[GameManager] ReturnToLobby llamado");
             _currentState = GameState.Lobby;
             
             // Reset player ready status
@@ -650,7 +667,7 @@ namespace EpochLegends
         {
             if (this == null || !isActiveAndEnabled) return;
             
-            Debug.LogError("GAMEMANAGER: OnHeroSelectionComplete llamado");
+            Debug.Log("GAMEMANAGER: OnHeroSelectionComplete llamado");
             
             // Guardar las selecciones en nuestro diccionario local
             _heroSelections.Clear();
@@ -662,7 +679,7 @@ namespace EpochLegends
             // Proceso de diagnóstico
             foreach (var selection in selectionResults)
             {
-                Debug.LogError($"Procesando selección: Jugador {selection.Key} seleccionó héroe: {selection.Value}");
+                Debug.Log($"Procesando selección: Jugador {selection.Key} seleccionó héroe: {selection.Value}");
             }
             
             // Process the hero selections
@@ -677,7 +694,7 @@ namespace EpochLegends
                     playerInfo.SelectedHeroId = heroId;
                     _connectedPlayers[playerNetId] = playerInfo;
                     
-                    Debug.LogError($"Actualizada info del jugador {playerNetId} con héroe: {heroId}");
+                    Debug.Log($"Actualizada info del jugador {playerNetId} con héroe: {heroId}");
                 }
                 else
                 {
@@ -686,10 +703,10 @@ namespace EpochLegends
             }
             
             // Asegurarse que la escena que queremos cargar existe
-            Debug.LogError($"Intentando cambiar a escena: {gameplayScene}");
+            Debug.Log($"Intentando cambiar a escena: {gameplayScene}");
             
             // Transition to next phase
-            Debug.LogError("Iniciando juego (StartGame)");
+            Debug.Log("Iniciando juego (StartGame)");
             try {
                 StartGame();
             } catch (System.Exception ex) {
@@ -706,7 +723,7 @@ namespace EpochLegends
             
             if (this == null || !isActiveAndEnabled) yield break;
             
-            Debug.LogError("Reintentando StartGame...");
+            Debug.Log("Reintentando StartGame...");
             
             try
             {
@@ -717,7 +734,7 @@ namespace EpochLegends
                 // Intentar cargar la escena directamente
                 if (NetworkManager.singleton != null)
                 {
-                    Debug.LogError("Cambiando escena directamente en segundo intento");
+                    Debug.Log("Cambiando escena directamente en segundo intento");
                     NetworkManager.singleton.ServerChangeScene(gameplayScene);
                 }
             }
@@ -728,105 +745,105 @@ namespace EpochLegends
         }
         
         [Server]
-public void OnHeroCreated(Hero hero)
-{
-    if (this == null || !isActiveAndEnabled) return;
-    
-    if (hero != null)
-    {
-        Debug.Log($"[GameManager] Hero created: {hero.name}");
-        
-        // Buscar el ID del jugador propietario - adapta esto según la estructura de tu Hero
-        uint ownerId = 0;
-        
-        // Intentar obtener el ID del propietario de diferentes formas posibles
-        var netIdentity = hero.GetComponent<NetworkIdentity>();
-        if (netIdentity != null && netIdentity.connectionToClient != null)
+        public void OnHeroCreated(Hero hero)
         {
-            // Intenta obtener el NetId del jugador propietario
-            var playerIdentity = netIdentity.connectionToClient.identity;
-            if (playerIdentity != null)
-            {
-                ownerId = playerIdentity.netId;
-                Debug.LogError($"Se encontró ownerId utilizando connectionToClient: {ownerId}");
-            }
-        }
-        
-        // Si no se pudo obtener de esa forma, intentar con el NetId del propio héroe
-        if (ownerId == 0 && netIdentity != null)
-        {
-            ownerId = netIdentity.netId;
-            Debug.LogError($"Usando netId del héroe como fallback: {ownerId}");
-        }
-        
-        // Si encontramos un ID, buscar la selección correspondiente
-        if (ownerId != 0 && _heroSelections.TryGetValue(ownerId, out string heroId))
-        {
-            Debug.LogError($"Encontrado heroId {heroId} para jugador {ownerId}");
+            if (this == null || !isActiveAndEnabled) return;
             
-            // Intentar configurar el héroe según el tipo seleccionado
-            try 
+            if (hero != null)
             {
-                // Verificar si el héroe tiene un método para establecer su tipo
-                var setHeroTypeMethod = hero.GetType().GetMethod("SetHeroType");
-                if (setHeroTypeMethod != null)
+                Debug.Log($"[GameManager] Hero created: {hero.name}");
+                
+                // Buscar el ID del jugador propietario - adapta esto según la estructura de tu Hero
+                uint ownerId = 0;
+                
+                // Intentar obtener el ID del propietario de diferentes formas posibles
+                var netIdentity = hero.GetComponent<NetworkIdentity>();
+                if (netIdentity != null && netIdentity.connectionToClient != null)
                 {
-                    setHeroTypeMethod.Invoke(hero, new object[] { heroId });
-                    Debug.LogError($"Configurado héroe usando método SetHeroType");
+                    // Intenta obtener el NetId del jugador propietario
+                    var playerIdentity = netIdentity.connectionToClient.identity;
+                    if (playerIdentity != null)
+                    {
+                        ownerId = playerIdentity.netId;
+                        Debug.Log($"Se encontró ownerId utilizando connectionToClient: {ownerId}");
+                    }
                 }
-                // O si tiene una propiedad HeroId o similar
-                else 
+                
+                // Si no se pudo obtener de esa forma, intentar con el NetId del propio héroe
+                if (ownerId == 0 && netIdentity != null)
                 {
-                    var heroIdProperty = hero.GetType().GetProperty("HeroId") ?? 
-                                        hero.GetType().GetProperty("HeroType") ?? 
-                                        hero.GetType().GetProperty("Type");
+                    ownerId = netIdentity.netId;
+                    Debug.Log($"Usando netId del héroe como fallback: {ownerId}");
+                }
+                
+                // Si encontramos un ID, buscar la selección correspondiente
+                if (ownerId != 0 && _heroSelections.TryGetValue(ownerId, out string heroId))
+                {
+                    Debug.Log($"Encontrado heroId {heroId} para jugador {ownerId}");
                     
-                    if (heroIdProperty != null && heroIdProperty.CanWrite)
+                    // Intentar configurar el héroe según el tipo seleccionado
+                    try 
                     {
-                        heroIdProperty.SetValue(hero, heroId);
-                        Debug.LogError($"Configurado héroe usando propiedad {heroIdProperty.Name}");
+                        // Verificar si el héroe tiene un método para establecer su tipo
+                        var setHeroTypeMethod = hero.GetType().GetMethod("SetHeroType");
+                        if (setHeroTypeMethod != null)
+                        {
+                            setHeroTypeMethod.Invoke(hero, new object[] { heroId });
+                            Debug.Log($"Configurado héroe usando método SetHeroType");
+                        }
+                        // O si tiene una propiedad HeroId o similar
+                        else 
+                        {
+                            var heroIdProperty = hero.GetType().GetProperty("HeroId") ?? 
+                                                hero.GetType().GetProperty("HeroType") ?? 
+                                                hero.GetType().GetProperty("Type");
+                            
+                            if (heroIdProperty != null && heroIdProperty.CanWrite)
+                            {
+                                heroIdProperty.SetValue(hero, heroId);
+                                Debug.Log($"Configurado héroe usando propiedad {heroIdProperty.Name}");
+                            }
+                            else
+                            {
+                                Debug.LogError("No se encontró método o propiedad para configurar el tipo de héroe");
+                            }
+                        }
                     }
-                    else
+                    catch (System.Exception ex)
                     {
-                        Debug.LogError("No se encontró método o propiedad para configurar el tipo de héroe");
+                        Debug.LogError($"Error al configurar héroe: {ex.Message}");
                     }
                 }
+                else
+                {
+                    Debug.LogError($"No se encontró heroId para jugador {ownerId}");
+                }
             }
-            catch (System.Exception ex)
+            else
             {
-                Debug.LogError($"Error al configurar héroe: {ex.Message}");
+                Debug.LogError("[GameManager] OnHeroCreated called with null hero");
             }
         }
-        else
-        {
-            Debug.LogError($"No se encontró heroId para jugador {ownerId}");
-        }
-    }
-    else
-    {
-        Debug.LogError("[GameManager] OnHeroCreated called with null hero");
-    }
-}
         
         // Método para forzar verificación de la configuración
         public void VerifyNetworkSettings() 
         {
-            Debug.LogError("=== VERIFICACIÓN DE CONFIGURACIÓN DEL GAMEMANAGER ===");
-            Debug.LogError($"Escena de lobby: {lobbyScene}");
-            Debug.LogError($"Escena de selección: {heroSelectionScene}");
-            Debug.LogError($"Escena de gameplay: {gameplayScene}");
-            Debug.LogError($"Estado actual: {_currentState}");
-            Debug.LogError($"Temporizador: {_stateTimer}");
-            Debug.LogError($"Jugadores conectados: {_connectedPlayers.Count}");
+            Debug.Log("=== VERIFICACIÓN DE CONFIGURACIÓN DEL GAMEMANAGER ===");
+            Debug.Log($"Escena de lobby: {lobbyScene}");
+            Debug.Log($"Escena de selección: {heroSelectionScene}");
+            Debug.Log($"Escena de gameplay: {gameplayScene}");
+            Debug.Log($"Estado actual: {_currentState}");
+            Debug.Log($"Temporizador: {_stateTimer}");
+            Debug.Log($"Jugadores conectados: {_connectedPlayers.Count}");
             
             // Verificar NetworkManager
             if (NetworkManager.singleton != null)
             {
-                Debug.LogError($"NetworkManager encontrado: {NetworkManager.singleton.GetType().Name}");
-                Debug.LogError($"Escena offline: {NetworkManager.singleton.offlineScene}");
-                Debug.LogError($"Escena online: {NetworkManager.singleton.onlineScene}");
-                Debug.LogError($"Servidor activo: {NetworkServer.active}");
-                Debug.LogError($"Cliente activo: {NetworkClient.active}");
+                Debug.Log($"NetworkManager encontrado: {NetworkManager.singleton.GetType().Name}");
+                Debug.Log($"Escena offline: {NetworkManager.singleton.offlineScene}");
+                Debug.Log($"Escena online: {NetworkManager.singleton.onlineScene}");
+                Debug.Log($"Servidor activo: {NetworkServer.active}");
+                Debug.Log($"Cliente activo: {NetworkClient.active}");
             }
             else
             {
@@ -836,14 +853,48 @@ public void OnHeroCreated(Hero hero)
             // Verificar jugadores
             foreach (var player in _connectedPlayers)
             {
-                Debug.LogError($"Jugador {player.Key}: Ready={player.Value.IsReady}, Team={player.Value.TeamId}, Hero={player.Value.SelectedHeroId}");
+                Debug.Log($"Jugador {player.Key}: Name={player.Value.PlayerName}, Ready={player.Value.IsReady}, Team={player.Value.TeamId}, Hero={player.Value.SelectedHeroId}");
             }
             
             // Verificar selecciones guardadas
             foreach (var selection in _heroSelections)
             {
-                Debug.LogError($"Selección guardada: Jugador {selection.Key} -> Héroe {selection.Value}");
+                Debug.Log($"Selección guardada: Jugador {selection.Key} -> Héroe {selection.Value}");
             }
+        }
+        
+        // Nuevo método para actualizar el nombre del jugador
+        [Server]
+        public void UpdatePlayerName(uint netId, string newName)
+        {
+            if (!_connectedPlayers.ContainsKey(netId))
+                return;
+                
+            var playerInfo = _connectedPlayers[netId];
+            string oldName = playerInfo.PlayerName;
+            playerInfo.PlayerName = newName;
+            _connectedPlayers[netId] = playerInfo;
+            
+            // Notificar a todos los clientes sobre el cambio de nombre
+            RpcPlayerNameChanged(netId, oldName, newName);
+            
+            if (enableDebugLogs)
+                Debug.Log($"[GameManager] Player {netId} name changed from '{oldName}' to '{newName}'");
+                
+            // Forzar actualización de UI
+            Invoke(nameof(TriggerUIRefreshForAllClients), 0.2f);
+        }
+        
+        [ClientRpc]
+        private void RpcPlayerNameChanged(uint playerNetId, string oldName, string newName)
+        {
+            if (this == null || !isActiveAndEnabled) return;
+            
+            if (enableDebugLogs)
+                Debug.Log($"[GameManager] RPC: Player {playerNetId} name changed from '{oldName}' to '{newName}'");
+            
+            // Notificar a los suscriptores que los datos del jugador han cambiado
+            NotifyPlayerDataChanged();
         }
     }
 }
